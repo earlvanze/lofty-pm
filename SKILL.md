@@ -95,6 +95,9 @@ Execution order:
 - `read_description_md` — read and parse DESCRIPTION.md into sections
 - `write_description_md` — write/update DESCRIPTION.md (full replace or section merge)
 - `push_property_data` — push local DETAILS.md / FINANCIALS.md data back to Lofty
+- `webpack_get_pl_cutoff_config` — get P\u0026L cutoff configuration
+- `webpack_get_pl_entry` — get a P\u0026L entry for a property
+- `webpack_create_pl_entry` — create a P\u0026L entry via webpack injection
 - `extract_lease_begins_dates` — audit lease_begins_date candidates from DESCRIPTION.md
 - `update_lease_begins_dates` — prepare or apply lease_begins_date updates
 
@@ -253,15 +256,29 @@ result = recv_until_id(cid, 35)
 
 ### Key Module IDs (subject to change)
 
-- `51046` — Property management module (`mod.PK` = get-manager-properties)
-- Module IDs may change across Lofty deployments; inspect via DevTools Console
+Module `51046` — Property Management API wrapper:
 
-### Advantages
+| Export | API Endpoint | Method | Description |
+|--------|-------------|--------|-------------|
+| `PK` | `getManagerProperties` | GET | Fetch all properties for a month |
+| `so` | `updateManagerProperty` | POST | Update a property (patch fields) |
+| `AB` | `managerSendPropertyUpdates` | POST | Send owner update email |
+| `SP` | `managerUpdatePLEntry` | POST | Update a P&L entry |
+| `b1` | `managerGetPLEntry` | GET | Get a single P&L entry |
+| `cj` | `getPlCutoffConfig` | GET | Get P&L cutoff config |
+| `t1` | `managerCreatePLEntry` | POST | Create a P&L entry |
 
-1. **No auth header capture needed** — Uses existing browser session auth
-2. **Single call for all properties** — `mod.PK()` returns entire portfolio
-3. **No AWS Sig v4 complexity** — Browser handles signing automatically
-4. **Works with any auth state** — Email confirm, MFA, etc. already resolved in browser
+Module `50469` — React hooks composing the above API calls:
+
+| Export | Calls | Description |
+|--------|-------|-------------|
+| `Bn` | `PK` | Fetch properties for current month |
+| `jg` | `so` | Update/modify property |
+| `AB` | `AB` | Send property update email |
+| `zd` | `b1` | Get single P&L entry |
+| `jw` | `t1` | Create P&L entry |
+| `et` | `SP` | Update P&L entry |
+| `Xl` | `cj` | Get PL cutoff config |
 
 ### When to Use
 

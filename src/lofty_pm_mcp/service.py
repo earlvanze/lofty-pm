@@ -870,6 +870,178 @@ def backfill_updates_history(
     }
 
 
+def webpack_get_pl_cutoff_config() -> dict[str, Any]:
+    """Get P\u0026L cutoff configuration from Lofty via webpack injection."""
+    from lofty_cdp import ensure_lofty_cdp_context
+    from capture_lofty_auth_via_cdp import connect_ws
+
+    ctx = ensure_lofty_cdp_context(mode="list")
+    tid = ctx["targetId"]
+    ws = connect_ws(tid)
+    msg_id = 0
+
+    def sr(method, params=None, timeout=30):
+        nonlocal msg_id
+        msg_id += 1
+        cid = msg_id
+        ws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                obj = json.loads(ws.recv())
+                if obj.get("id") == cid:
+                    return obj
+            except Exception:
+                pass
+        raise TimeoutError()
+
+    # Wait for webpack
+    for _ in range(15):
+        resp = sr("Runtime.evaluate", {
+            "expression": 'typeof webpackChunklofty_investing_webapp !== "undefined"',
+            "returnByValue": True, "awaitPromise": False,
+        })
+        if resp.get("result", {}).get("result", {}).get("value") is True:
+            break
+        time.sleep(2)
+
+    expr = '''(async () => {
+      let __req;
+      webpackChunklofty_investing_webapp.push([[Math.random()], {}, function(req){ __req = req; }]);
+      const mod = __req(51046);
+      const config = await mod.cj();
+      return JSON.stringify(config);
+    })()'''
+
+    resp = sr("Runtime.evaluate", {
+        "expression": expr, "awaitPromise": True, "returnByValue": True, "timeout": 30000,
+    })
+    ws.close()
+    val = resp.get("result", {}).get("result", {}).get("value", "null")
+    result = json.loads(val) if isinstance(val, str) else val
+    return {"endpoint": "getPlCutoffConfig", "data": result}
+
+
+def webpack_get_pl_entry(
+    property_id: str,
+    year: int | None = None,
+    month: int | None = None,
+) -> dict[str, Any]:
+    """Get a P\u0026L entry for a property via webpack injection."""
+    from lofty_cdp import ensure_lofty_cdp_context
+    from capture_lofty_auth_via_cdp import connect_ws
+
+    import datetime as dt
+    now = dt.datetime.now()
+    y, m = str(year or now.year), str(month or now.month)
+
+    ctx = ensure_lofty_cdp_context(property_id=property_id, mode="list")
+    tid = ctx["targetId"]
+    ws = connect_ws(tid)
+    msg_id = 0
+
+    def sr(method, params=None, timeout=30):
+        nonlocal msg_id
+        msg_id += 1
+        cid = msg_id
+        ws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                obj = json.loads(ws.recv())
+                if obj.get("id") == cid:
+                    return obj
+            except Exception:
+                pass
+        raise TimeoutError()
+
+    for _ in range(15):
+        resp = sr("Runtime.evaluate", {
+            "expression": 'typeof webpackChunklofty_investing_webapp !== "undefined"',
+            "returnByValue": True, "awaitPromise": False,
+        })
+        if resp.get("result", {}).get("result", {}).get("value") is True:
+            break
+        time.sleep(2)
+
+    expr = f'''(async () => {{
+      let __req;
+      webpackChunklofty_investing_webapp.push([[Math.random()], {{}}, function(req){{ __req = req; }}]);
+      const mod = __req(51046);
+      const plEntry = await mod.b1({{propertyId: "{property_id}", year: "{y}", month: "{m}"}});
+      return JSON.stringify(plEntry);
+    }})()'''
+
+    resp = sr("Runtime.evaluate", {
+        "expression": expr, "awaitPromise": True, "returnByValue": True, "timeout": 30000,
+    })
+    ws.close()
+    val = resp.get("result", {}).get("result", {}).get("value", "null")
+    result = json.loads(val) if isinstance(val, str) else val
+    return {"property_id": property_id, "year": y, "month": m, "data": result}
+
+
+def webpack_create_pl_entry(
+    property_id: str,
+    year: int | None = None,
+    month: int | None = None,
+    pl_entry: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Create a P\u0026L entry for a property via webpack injection."""
+    from lofty_cdp import ensure_lofty_cdp_context
+    from capture_lofty_auth_via_cdp import connect_ws
+
+    import datetime as dt
+    now = dt.datetime.now()
+    y, m = str(year or now.year), str(month or now.month)
+    entry_json = json.dumps(pl_entry or {})
+
+    ctx = ensure_lofty_cdp_context(property_id=property_id, mode="list")
+    tid = ctx["targetId"]
+    ws = connect_ws(tid)
+    msg_id = 0
+
+    def sr(method, params=None, timeout=30):
+        nonlocal msg_id
+        msg_id += 1
+        cid = msg_id
+        ws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                obj = json.loads(ws.recv())
+                if obj.get("id") == cid:
+                    return obj
+            except Exception:
+                pass
+        raise TimeoutError()
+
+    for _ in range(15):
+        resp = sr("Runtime.evaluate", {
+            "expression": 'typeof webpackChunklofty_investing_webapp !== "undefined"',
+            "returnByValue": True, "awaitPromise": False,
+        })
+        if resp.get("result", {}).get("result", {}).get("value") is True:
+            break
+        time.sleep(2)
+
+    expr = f'''(async () => {{
+      let __req;
+      webpackChunklofty_investing_webapp.push([[Math.random()], {{}}, function(req){{ __req = req; }}]);
+      const mod = __req(51046);
+      const result = await mod.t1({{propertyId: "{property_id}", year: "{y}", month: "{m}"}});
+      return JSON.stringify(result);
+    }})()'''
+
+    resp = sr("Runtime.evaluate", {
+        "expression": expr, "awaitPromise": True, "returnByValue": True, "timeout": 30000,
+    })
+    ws.close()
+    val = resp.get("result", {}).get("result", {}).get("value", "null")
+    result = json.loads(val) if isinstance(val, str) else val
+    return {"property_id": property_id, "year": y, "month": m, "data": result}
+
+
 def _ensure_gmp_payload(path: Path, year: int | None, month: int | None) -> None:
     if path.exists():
         return

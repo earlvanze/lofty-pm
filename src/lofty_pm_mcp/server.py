@@ -320,6 +320,39 @@ if FastMCP is not None:
             dry_run=dry_run,
         )
 
+    @mcp.tool()
+    def webpack_get_pl_cutoff_config() -> dict[str, Any]:
+        """Get P\u0026L cutoff configuration from Lofty."""
+        return service.webpack_get_pl_cutoff_config()
+
+    @mcp.tool()
+    def webpack_get_pl_entry(
+        property_id: str,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> dict[str, Any]:
+        """Get a P\u0026L entry for a property."""
+        return service.webpack_get_pl_entry(
+            property_id=property_id,
+            year=year,
+            month=month,
+        )
+
+    @mcp.tool()
+    def webpack_create_pl_entry(
+        property_id: str,
+        year: int | None = None,
+        month: int | None = None,
+        pl_entry: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create a P\u0026L entry for a property via webpack injection."""
+        return service.webpack_create_pl_entry(
+            property_id=property_id,
+            year=year,
+            month=month,
+            pl_entry=pl_entry,
+        )
+
 
 def main() -> None:
     if FastMCP is None:  # pragma: no cover

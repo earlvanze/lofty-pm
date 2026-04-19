@@ -152,6 +152,9 @@ mcporter call "lofty-pm.read_description_md" --args '{"property_query":"49 Bannb
 | 16 | `read_description_md` | Read/parse DESCRIPTION.md into sections | local read |
 | 17 | `write_description_md` | Write/update DESCRIPTION.md (full or section merge) | local write |
 | 18 | `push_property_data` | Push DETAILS.md / FINANCIALS.md to Lofty | local → Lofty |
+| 19 | `webpack_get_pl_cutoff_config` | Get P\u0026L cutoff config | Lofty read |
+| 20 | `webpack_get_pl_entry` | Get P\u0026L entry for a property | Lofty read |
+| 21 | `webpack_create_pl_entry` | Create P\u0026L entry | Lofty write |
 
 ### Data Round-Trip Coverage
 
