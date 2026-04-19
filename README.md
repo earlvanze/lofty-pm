@@ -234,50 +234,54 @@ This tool doesn’t make Lofty easier to hack. It:
 
 ## Adapting for Other Property Managers
 
-The `scripts/generic_pm_matcher.py` template makes it easy to adapt this tool for any PM platform:
+All PMs on Lofty use the **same API** (webpack module 51046). The only differences are:
 
-1. **Copy and rename**: `cp scripts/generic_pm_matcher.py scripts/acme_pm_matcher.py`
-2. **Update `PM_CONFIG`**: Change `name`, URL patterns, field names, and corpus structure
-3. **Replace `fetch_pm_properties()`**: Use your PM's API (REST, GraphQL, or browser automation)
-4. **Adjust `find_corpus_dirs()`**: If your directory layout differs
-5. **Tune `matching` weights**: If addresses follow different conventions
+1. **Which properties appear** — each PM account sees its own portfolio when logged in
+2. **Dropbox folder structure** — each PM may organize their Real Estate corpus differently
+3. **Custom fields** — some PMs track extra sections in DESCRIPTION.md / UPDATES.md
 
-The fuzzy matcher handles:
-- Address normalization (ordinals, unit numbers, punctuation)
-- State/city bonus scoring
-- Substring and word-overlap matching
-- Unresolved property detection
-- Path templating (`${PM_WORKSPACE_ROOT}`) for portability
-
-Example adaptation for a fictional "Acme PM":
+The `scripts/generic_pm_matcher.py` template handles all of this via `PM_CONFIG`:
 
 ```python
+# Example: ECO Systems (different Dropbox root)
 PM_CONFIG = {
-    "name": "Acme",
-    "pm_url_patterns": ["acme.com/properties", "acme.com/manage"],
-    "pm_property_fields": {
-        "id": "property_id",
-        "name": "display_name",
-        "address": "street_address",
-        "city": "city",
-        "state": "state_code",
-        "zip": "zip_code",
-        "slug": "url_slug",
-        "unit": "unit_id",
+    "name": "eco-systems",
+    "corpus_structure": {
+        # Their Dropbox folder might be named differently
+        "root": "${PM_WORKSPACE_ROOT}/Dropbox/Real Estate - ECO Systems",
+        "state_dirs": True,
+        "public_dir": "Public",
+        "description_file": "DESCRIPTION.md",
     },
-    "matching": {
-        "exact_match_threshold": 100,
-        "word_overlap_weight": 5,
-        "minimum_match_score": 10,
+    # Same Lofty fields — don't change these
+    "pm_property_fields": {
+        "id": "id",
+        "name": "assetName",
+        "address": "address",
+        # ...
+    },
+    # Same Lofty API — fetch_lofty_properties() is shared
+    "lofty_modules": {
+        "property_management": 51046,
     },
 }
+```
 
-def fetch_pm_properties(year=None, month=None):
-    # Use Acme's REST API
-    import requests
-    resp = requests.get(f"https://api.acme.com/v1/properties?year={year}&month={month}",
-                       headers={"Authorization": f"Bearer {os.environ['ACME_API_KEY']}"})
-    return resp.json()["properties"]
+### Steps to set up a new PM
+
+1. **Copy the template**: `cp scripts/generic_pm_matcher.py scripts/eco_systems_matcher.py`
+2. **Update `PM_CONFIG`**: Change `name`, `corpus_structure.root` to point to their Dropbox folder
+3. **Log in as that PM**: The webpack fetcher returns whichever properties the logged-in PM account manages
+4. **Run**: `python3 scripts/eco_systems_matcher.py --apply`
+
+That's it. All 22 MCP tools work the same — they just operate on the PM's own portfolio.
+
+### Multiple PMs on one machine
+
+Each PM gets their own `config/property_update_map.json`. Use `--map-file` to specify:
+
+```bash
+python3 scripts/eco_systems_matcher.py --map-file config/eco_systems_property_map.json --apply
 ```
 
 ## License
