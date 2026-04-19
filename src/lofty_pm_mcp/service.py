@@ -20,6 +20,7 @@ import extract_lofty_lease_begins_dates as lease_extract  # type: ignore
 import ingest_atlas_relay_update as atlas_ingest  # type: ignore
 from lofty_pm_paths import load_property_map as load_resolved_property_map  # type: ignore
 import publish_latest_update_to_lofty as publisher  # type: ignore
+import push_property_data_to_lofty as pusher  # type: ignore
 import rebuild_property_update_map as map_rebuilder  # type: ignore
 import read_write_description_md as description_rw  # type: ignore
 import update_lofty_pm_property as replay  # type: ignore
@@ -766,6 +767,78 @@ def write_description_md(
         opening=opening,
         dry_run=dry_run,
     )
+
+
+def push_property_data(
+    property_query: str | None = None,
+    property_id: str | None = None,
+    property_map: str | None = None,
+    include_details: bool = True,
+    include_financials: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Push local DETAILS.md / FINANCIALS.md data to Lofty.
+
+    Reads local markdown files, parses structured fields, builds a patch,
+    and applies it via webpack injection.
+    """
+    q = property_id or property_query
+    build = pusher.build_patch_from_local(
+        property_query=q,
+        property_id=property_id,
+        property_map=property_map,
+        include_details=include_details,
+        include_financials=include_financials,
+    )
+    patch = build.get("patch", {})
+    if not patch:
+        return {
+            "status": "empty_patch",
+            "sources": build.get("sources", []),
+            "message": "No fields extracted from local files",
+        }
+
+    # Resolve property_id if not provided
+    resolved_id = property_id
+    if not resolved_id and property_query:
+        props = _load_property_candidates(property_map)
+        matches = [p for p in props
+                    if property_query.lower() in (p.get("property_name") or "").lower()
+                    or property_query.lower() in (p.get("full_address") or "").lower()
+                    or property_query == p.get("lofty_property_id")]
+        if matches:
+            resolved_id = matches[0].get("lofty_property_id")
+    if not resolved_id:
+        return {
+            "status": "missing_property_id",
+            "sources": build.get("sources", []),
+            "message": "Cannot resolve property_id for push",
+        }
+
+    if dry_run:
+        return {
+            "status": "dry_run",
+            "property_id": resolved_id,
+            "sources": build.get("sources", []),
+            "field_count": build.get("field_count", 0),
+            "fields": build.get("fields", []),
+            "patch": patch,
+        }
+
+    # Apply via webpack
+    update_result = webpack_update_property(
+        property_id=resolved_id,
+        patch=patch,
+    )
+
+    return {
+        "status": "applied",
+        "property_id": resolved_id,
+        "sources": build.get("sources", []),
+        "field_count": build.get("field_count", 0),
+        "fields": build.get("fields", []),
+        "update_result": update_result,
+    }
 
 
 def backfill_updates_history(

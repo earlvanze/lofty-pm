@@ -301,6 +301,25 @@ if FastMCP is not None:
             dry_run=dry_run,
         )
 
+    @mcp.tool()
+    def push_property_data(
+        property_query: str | None = None,
+        property_id: str | None = None,
+        property_map: str | None = None,
+        include_details: bool = True,
+        include_financials: bool = True,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Push local DETAILS.md / FINANCIALS.md data back to Lofty."""
+        return service.push_property_data(
+            property_query=property_query,
+            property_id=property_id,
+            property_map=property_map,
+            include_details=include_details,
+            include_financials=include_financials,
+            dry_run=dry_run,
+        )
+
 
 def main() -> None:
     if FastMCP is None:  # pragma: no cover
