@@ -91,6 +91,44 @@ if FastMCP is not None:
         )
 
     @mcp.tool()
+    def ingest_atlas_relay_update(
+        text: str,
+        property_query: str | None = None,
+        date: str | None = None,
+        property_map: str | None = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Clean Atlas Relay text and write it into canonical UPDATES.md for the matched property."""
+        return service.ingest_atlas_relay_update(
+            text=text,
+            property_query=property_query,
+            date=date,
+            property_map=property_map,
+            dry_run=dry_run,
+        )
+
+    @mcp.tool()
+    def ingest_and_publish_atlas_relay_update(
+        text: str,
+        property_query: str | None = None,
+        date: str | None = None,
+        property_map: str | None = None,
+        dry_run: bool = False,
+        close_extra_tabs: bool = True,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """End-to-end Atlas Relay ingest into UPDATES.md, then publish to Lofty PM."""
+        return service.ingest_and_publish_atlas_relay_update(
+            text=text,
+            property_query=property_query,
+            date=date,
+            property_map=property_map,
+            dry_run=dry_run,
+            close_extra_tabs=close_extra_tabs,
+            force=force,
+        )
+
+    @mcp.tool()
     def write_property_update(
         property_query: str,
         text: str,
@@ -122,6 +160,21 @@ if FastMCP is not None:
             dry_run=dry_run,
             close_extra_tabs=close_extra_tabs,
             force=force,
+        )
+
+    @mcp.tool()
+    def rebuild_property_map(
+        property_map: str | None = None,
+        dry_run: bool = True,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> dict[str, Any]:
+        """Rebuild property_update_map.json from live Lofty manager properties and the Real Estate corpus."""
+        return service.rebuild_property_map(
+            property_map=property_map,
+            dry_run=dry_run,
+            year=year,
+            month=month,
         )
 
     @mcp.tool()
@@ -160,6 +213,30 @@ if FastMCP is not None:
             close_extra_tabs=close_extra_tabs,
             property_map=property_map,
             output_dir=output_dir,
+        )
+
+    @mcp.tool()
+    def webpack_get_manager_properties(
+        year: int | None = None,
+        month: int | None = None,
+        property_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetch all manager properties via CDP webpack injection (no auth capture needed)."""
+        return service.webpack_get_manager_properties(
+            year=year,
+            month=month,
+            property_id=property_id,
+        )
+
+    @mcp.tool()
+    def webpack_update_property(
+        property_id: str,
+        patch: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update a Lofty property via CDP webpack injection (no auth capture needed)."""
+        return service.webpack_update_property(
+            property_id=property_id,
+            patch=patch,
         )
 
 

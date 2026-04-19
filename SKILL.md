@@ -68,7 +68,9 @@ Execution order:
 ### MCP server surface
 - `src/lofty_pm_mcp/server.py`
   - exposes the core Lofty PM flows as MCP tools
-  - wraps live manager-property fetches, payload building, update writing/publishing, save/send mutations, and lease date backfills
+  - wraps live manager-property fetches, Atlas Relay ingest, property-map rebuilds, update writing/publishing, save/send mutations, and lease date backfills
+- `scripts/rebuild_property_update_map.py`
+  - rebuilds `config/property_update_map.json` from live Lofty manager properties plus the Dropbox Real Estate corpus
 - `pyproject.toml`
   - packages the repo as an installable MCP server entry point: `lofty-pm-mcp`
 - environment notes
@@ -76,15 +78,20 @@ Execution order:
   - optionally set `LOFTY_PM_REAL_ESTATE_ROOT` directly to override the property-document search root
   - `config/property_update_map.json` now stores `${LOFTY_PM_WORKSPACE_ROOT}` placeholders instead of one machine's absolute paths
 
-### Initial MCP tools
-- `get_manager_properties`
-- `build_property_payloads`
-- `write_property_update`
-- `publish_latest_property_update`
-- `update_manager_property`
-- `send_property_updates`
-- `extract_lease_begins_dates`
-- `update_lease_begins_dates`
+### MCP tools
+- `get_manager_properties` — fetch live Lofty manager property list
+- `build_property_payloads` — build save/send payloads for a property
+- `ingest_atlas_relay_update` — clean Atlas Relay text and write into UPDATES.md
+- `ingest_and_publish_atlas_relay_update` — end-to-end ingest + publish to Lofty
+- `write_property_update` — write a canonical dated entry into a property's UPDATES.md
+- `publish_latest_property_update` — push update history to Lofty and optionally send owner email
+- `rebuild_property_map` — rebuild property_update_map.json from live Lofty + corpus
+- `update_manager_property` — apply an update-manager-property mutation via runtime
+- `send_property_updates` — send the owner update email for a property
+- `webpack_get_manager_properties` — fetch all properties via CDP webpack injection (no auth capture)
+- `webpack_update_property` — update a property via CDP webpack injection (no auth capture)
+- `extract_lease_begins_dates` — audit lease_begins_date candidates from DESCRIPTION.md
+- `update_lease_begins_dates` — prepare or apply lease_begins_date updates
 
 ### Recommended one-shot flow
 

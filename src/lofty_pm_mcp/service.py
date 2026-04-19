@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +17,10 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import build_lofty_pm_payloads as payload_builder  # type: ignore
 import extract_lofty_lease_begins_dates as lease_extract  # type: ignore
+import ingest_atlas_relay_update as atlas_ingest  # type: ignore
 from lofty_pm_paths import load_property_map as load_resolved_property_map  # type: ignore
 import publish_latest_update_to_lofty as publisher  # type: ignore
+import rebuild_property_update_map as map_rebuilder  # type: ignore
 import update_lofty_pm_property as replay  # type: ignore
 import write_property_update_md as update_writer  # type: ignore
 
@@ -214,6 +217,69 @@ def send_property_updates(
     )
 
 
+def ingest_atlas_relay_update(
+    text: str,
+    property_query: str | None = None,
+    date: str | None = None,
+    property_map: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    props = _load_property_map(property_map)
+    prop = atlas_ingest.resolve_explicit_property(property_query, props) if property_query else atlas_ingest.find_property(text, props)
+    if not prop:
+        raise LoftyPmError("Could not resolve property from Atlas Relay text")
+    if not prop.get("updates_md"):
+        raise LoftyPmError(f"Mapped property {property_query or prop.get('property_name')!r} does not have an updates_md target")
+    body = atlas_ingest.clean_update_text(text)
+    if not body:
+        raise LoftyPmError("No usable Atlas Relay update body after cleanup")
+    result = write_property_update(
+        property_query=prop.get("lofty_property_id") or prop.get("slug") or prop.get("property_name"),
+        text=body,
+        date=date,
+        property_map=property_map,
+        dry_run=dry_run,
+    )
+    result.update({
+        "property_name": prop["property_name"],
+        "lofty_property_id": prop["lofty_property_id"],
+        "slug": prop.get("slug"),
+        "updates_md": prop.get("updates_md"),
+        "source": "atlas_relay",
+    })
+    return result
+
+
+def ingest_and_publish_atlas_relay_update(
+    text: str,
+    property_query: str | None = None,
+    date: str | None = None,
+    property_map: str | None = None,
+    dry_run: bool = False,
+    close_extra_tabs: bool = True,
+    force: bool = False,
+) -> dict[str, Any]:
+    ingest_result = ingest_atlas_relay_update(
+        text=text,
+        property_query=property_query,
+        date=date,
+        property_map=property_map,
+        dry_run=dry_run,
+    )
+    publish_key = property_query or ingest_result.get("lofty_property_id") or ingest_result.get("slug") or ingest_result.get("property_name")
+    publish_result = publish_latest_property_update(
+        property_query=str(publish_key),
+        property_map=property_map,
+        dry_run=dry_run,
+        close_extra_tabs=close_extra_tabs,
+        force=force,
+    )
+    return {
+        "ingest": ingest_result,
+        "publish": publish_result,
+    }
+
+
 def write_property_update(
     property_query: str,
     text: str,
@@ -374,6 +440,16 @@ def publish_latest_property_update(
     }
 
 
+def rebuild_property_map(
+    property_map: str | None = None,
+    dry_run: bool = True,
+    year: int | None = None,
+    month: int | None = None,
+) -> dict[str, Any]:
+    target = property_map or str(DEFAULT_PROPERTY_MAP)
+    return map_rebuilder.rebuild_map(map_file=target, dry_run=dry_run, year=year, month=month)
+
+
 def extract_lease_begins_dates(
     property_query: str | None = None,
     multi_date_strategy: str = "ambiguous",
@@ -470,6 +546,145 @@ def update_lease_begins_dates(
         "output_dir": str(target_dir),
     }
     return {"summary": summary, "properties": rows}
+
+
+def webpack_get_manager_properties(
+    year: int | None = None,
+    month: int | None = None,
+    property_id: str | None = None,
+) -> dict[str, Any]:
+    """Fetch all manager properties via CDP webpack injection (no auth capture needed).
+
+    Uses webpack module 51046 PK function to call get-manager-properties
+    directly from the authenticated browser context.
+    """
+    from lofty_cdp import ensure_lofty_cdp_context
+    from capture_lofty_auth_via_cdp import connect_ws
+
+    y, m = _default_year_month(year, month)
+
+    ctx = ensure_lofty_cdp_context(mode="list")
+    tid = ctx["targetId"]
+    ws = connect_ws(tid)
+
+    msg_id = 0
+    def sr(method, params=None, timeout=30):
+        nonlocal msg_id
+        msg_id += 1
+        cid = msg_id
+        ws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                obj = json.loads(ws.recv())
+                if obj.get("id") == cid:
+                    return obj
+            except Exception:
+                pass
+        raise TimeoutError()
+
+    # Wait for webpack
+    for _ in range(15):
+        resp = sr("Runtime.evaluate", {
+            "expression": 'typeof webpackChunklofty_investing_webapp !== "undefined"',
+            "returnByValue": True, "awaitPromise": False,
+        })
+        if resp.get("result", {}).get("result", {}).get("value") is True:
+            break
+        time.sleep(2)
+
+    expr = f'''(async () => {{
+      let __req;
+      webpackChunklofty_investing_webapp.push([[Math.random()], {{}}, function(req){{ __req = req; }}]);
+      const mod = __req(51046);
+      const data = await mod.PK({{year: "{y}", month: "{m}"}});
+      const props = data?.data?.properties || [];
+      return JSON.stringify(props);
+    }})()'''
+
+    resp = sr("Runtime.evaluate", {
+        "expression": expr, "awaitPromise": True, "returnByValue": True, "timeout": 30000,
+    })
+    ws.close()
+
+    val = resp.get("result", {}).get("result", {}).get("value", "[]")
+    properties = json.loads(val) if isinstance(val, str) else val
+
+    if property_id:
+        prop = next((p for p in properties if p.get("id") == property_id), None)
+        return {"query": {"property_id": property_id, "year": y, "month": m}, "property": prop}
+
+    return {"query": {"year": y, "month": m}, "count": len(properties), "properties": properties}
+
+
+def webpack_update_property(
+    property_id: str,
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    """Update a Lofty property via CDP webpack injection (no auth capture needed).
+
+    Fetches the current property data via PK, merges the patch, and calls
+    mod.so() to apply the update-manager-property mutation.
+    """
+    from lofty_cdp import ensure_lofty_cdp_context
+    from capture_lofty_auth_via_cdp import connect_ws
+
+    import datetime as dt
+    now = dt.datetime.now()
+    y, m = str(now.year), str(now.month)
+
+    ctx = ensure_lofty_cdp_context(property_id=property_id, mode="edit")
+    tid = ctx["targetId"]
+    ws = connect_ws(tid)
+
+    msg_id = 0
+    def sr(method, params=None, timeout=60):
+        nonlocal msg_id
+        msg_id += 1
+        cid = msg_id
+        ws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                obj = json.loads(ws.recv())
+                if obj.get("id") == cid:
+                    return obj
+            except Exception:
+                pass
+        raise TimeoutError()
+
+    # Wait for webpack
+    for _ in range(15):
+        resp = sr("Runtime.evaluate", {
+            "expression": 'typeof webpackChunklofty_investing_webapp !== "undefined"',
+            "returnByValue": True, "awaitPromise": False,
+        })
+        if resp.get("result", {}).get("result", {}).get("value") is True:
+            break
+        time.sleep(2)
+
+    patch_json = json.dumps(patch)
+    expr = f'''(async () => {{
+      let __req;
+      webpackChunklofty_investing_webapp.push([[Math.random()], {{}}, function(req){{ __req = req; }}]);
+      const mod = __req(51046);
+      const data = await mod.PK({{year: "{y}", month: "{m}"}});
+      const props = data?.data?.properties || [];
+      const prop = props.find(p => p.id === "{property_id}");
+      if (!prop) return JSON.stringify({{error: "property not found"}});
+      const payload = {{propertyId: "{property_id}", patch: {{...prop, ...{patch_json}}}}};
+      const result = await mod.so(payload);
+      return JSON.stringify(result);
+    }})()'''
+
+    resp = sr("Runtime.evaluate", {
+        "expression": expr, "awaitPromise": True, "returnByValue": True, "timeout": 60000,
+    })
+    ws.close()
+
+    val = resp.get("result", {}).get("result", {}).get("value", "null")
+    result = json.loads(val) if isinstance(val, str) else val
+    return {"property_id": property_id, "patch": patch, "result": result}
 
 
 def _ensure_gmp_payload(path: Path, year: int | None, month: int | None) -> None:

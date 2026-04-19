@@ -8,6 +8,9 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
+WORKSPACE_ROOT_VAR = "${LOFTY_PM_WORKSPACE_ROOT}"
+REAL_ESTATE_ROOT_VAR = "${LOFTY_PM_REAL_ESTATE_ROOT}"
+TMP_ROOT_VAR = "${LOFTY_PM_TMP_ROOT}"
 LEGACY_WORKSPACE_ROOT = "/home/umbrel/.openclaw/workspace"
 WORKSPACE_ROOT = Path(os.environ.get("LOFTY_PM_WORKSPACE_ROOT") or LEGACY_WORKSPACE_ROOT)
 REAL_ESTATE_ROOT = Path(os.environ.get("LOFTY_PM_REAL_ESTATE_ROOT") or (WORKSPACE_ROOT / "Dropbox" / "Real Estate"))
@@ -39,6 +42,25 @@ def resolve_path(value: str | None) -> str | None:
     rendered = Template(value).safe_substitute(_path_vars())
     if rendered.startswith(LEGACY_WORKSPACE_ROOT):
         rendered = str(WORKSPACE_ROOT) + rendered[len(LEGACY_WORKSPACE_ROOT):]
+    return rendered
+
+
+def template_path(value: str | Path | None) -> str | None:
+    """Render an absolute path back into a portable template form."""
+    if value is None:
+        return None
+    rendered = str(value)
+    prefixes = [
+        (str(REAL_ESTATE_ROOT), REAL_ESTATE_ROOT_VAR),
+        (str(TMP_ROOT), TMP_ROOT_VAR),
+        (str(WORKSPACE_ROOT), WORKSPACE_ROOT_VAR),
+        (LEGACY_WORKSPACE_ROOT, WORKSPACE_ROOT_VAR),
+    ]
+    for prefix, repl in prefixes:
+        if rendered == prefix:
+            return repl
+        if rendered.startswith(prefix + os.sep):
+            return repl + rendered[len(prefix):]
     return rendered
 
 
