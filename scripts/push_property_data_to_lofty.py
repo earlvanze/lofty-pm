@@ -119,17 +119,41 @@ def parse_details_md(content: str) -> dict[str, Any]:
 
     # Basic Information
     basic = sections.get("Basic Information", "")
+    address: dict[str, str] = {}
     for line in basic.split("\n"):
         if "**Address:**" in line:
-            result["address"] = line.split("**Address:**", 1)[1].strip()
+            # Try to parse "123 Main St, City, ST 12345" format
+            addr_str = line.split("**Address:**", 1)[1].strip()
+            parts = [p.strip() for p in addr_str.split(",")]
+            if len(parts) >= 3:
+                address["streetAddress"] = parts[0]
+                address["city"] = parts[1]
+                state_zip = parts[2].strip()
+                # Split "FL 32137" into state + zip
+                sz_parts = state_zip.split()
+                if len(sz_parts) >= 2:
+                    address["state"] = sz_parts[0]
+                    address["zipCode"] = sz_parts[-1]
+                elif len(sz_parts) == 1:
+                    address["state"] = sz_parts[0]
+            elif len(parts) == 2:
+                address["streetAddress"] = parts[0]
+                address["city"] = parts[1]
+            else:
+                address["streetAddress"] = addr_str
         elif "**County:**" in line:
-            result["county"] = line.split("**County:**", 1)[1].strip()
+            address["county"] = line.split("**County:**", 1)[1].strip()
         elif "**Legal Description:**" in line:
-            result["legalDescription"] = line.split("**Legal Description:**", 1)[1].strip()
+            address["legalDescription"] = line.split("**Legal Description:**", 1)[1].strip()
         elif "**Property Type:**" in line:
             result["propertyType"] = line.split("**Property Type:**", 1)[1].strip()
         elif "**Year Built:**" in line:
             result["yearBuilt"] = _parse_int(line.split("**Year Built:**", 1)[1].strip())
+    if address:
+        result["address"] = address
+    # Remove the old flat address if it was set
+    result.pop("county", None)
+    result.pop("legalDescription", None)
 
     # Property Specifications
     specs = sections.get("Property Specifications", "")
@@ -279,6 +303,41 @@ def parse_financials_md(content: str) -> dict[str, Any]:
             result["capRate"] = float(m2.group(1)) if m2 else None
         elif "**Cash Flow:**" in line:
             result["cashFlow"] = _parse_money(line)
+
+    # Valuation
+    val_sec = sections.get("Valuation", "")
+    valuation: dict[str, Any] = {}
+    for line in val_sec.split("\n"):
+        if "**Current Value:**" in line:
+            valuation["currentValue"] = _parse_money(line)
+        elif "**Valuation Date:**" in line:
+            valuation["valuationDate"] = line.split("**Valuation Date:**", 1)[1].strip()
+        elif "**Source:**" in line:
+            valuation["source"] = line.split("**Source:**", 1)[1].strip()
+    if valuation:
+        result["valuation"] = valuation
+
+    # Cash-on-Cash Return
+    for line in cf_sec.split("\n"):
+        if "**Cash-on-Cash Return:**" in line:
+            m2 = re.search(r'([\d.]+)%?', line)
+            result["cashOnCashReturn"] = float(m2.group(1)) if m2 else None
+
+    # Rent Roll (structured)
+    rr_sec = sections.get("Rent Roll Summary", "")
+    if rr_sec.strip():
+        rent_roll: list[dict[str, Any]] = []
+        for line in rr_sec.split("\n"):
+            m = re.match(r'^-\s*Unit\s+(\S+)(?:[:]\s*\$?([\d,.]+))?/month(?:\s*\((\w+)\))?', line)
+            if m:
+                unit = {"unit": m.group(1)}
+                if m.group(2):
+                    unit["rent"] = float(m.group(2).replace(',', ''))
+                if m.group(3):
+                    unit["status"] = m.group(3)
+                rent_roll.append(unit)
+        if rent_roll:
+            result["rentRoll"] = rent_roll
 
     return result
 
