@@ -173,6 +173,9 @@ def format_details_md(details, property_id):
         lines.append(f"- **Occupancy Status:** {details['occupancyStatus']}")
     if details.get('leasingStatus'):
         lines.append(f"- **Leasing Status:** {details['leasingStatus']}")
+    if details.get('lease_begins_date') or details.get('currentLeaseDate'):
+        lbd = details.get('lease_begins_date') or details.get('currentLeaseDate', '')
+        lines.append(f"- **Lease Begins Date:** {lbd}")
     if details.get('currentRent'):
         lines.append(f"- **Current Rent:** ${details['currentRent']:,.2f}/month")
     if details.get('marketRent'):

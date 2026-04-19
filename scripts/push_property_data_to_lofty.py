@@ -176,6 +176,8 @@ def parse_details_md(content: str) -> dict[str, Any]:
             result["occupancyStatus"] = line.split("**Occupancy Status:**", 1)[1].strip()
         elif "**Leasing Status:**" in line:
             result["leasingStatus"] = line.split("**Leasing Status:**", 1)[1].strip()
+        elif "**Lease Begins Date:**" in line:
+            result["lease_begins_date"] = line.split("**Lease Begins Date:**", 1)[1].strip()
         elif "**Current Rent:**" in line:
             result["currentRent"] = _parse_money(line)
         elif "**Market Rent:**" in line:
