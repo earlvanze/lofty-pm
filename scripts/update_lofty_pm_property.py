@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, os, sys, tempfile, subprocess, time
+import argparse, datetime as dt, json, os, sys, tempfile, subprocess, time
 from pathlib import Path
 import requests
 
@@ -13,7 +13,12 @@ METHODS = {'get-manager-properties': 'GET', 'update-manager-property': 'POST', '
 DEFAULT_HEADERS = {'accept': 'application/json, text/plain, */*', 'content-type': 'application/json; charset=UTF-8', 'origin': 'https://www.lofty.ai', 'referer': 'https://www.lofty.ai/', 'user-agent': 'Mozilla/5.0 OpenClaw Lofty PM Skill'}
 ENV_HEADER_MAP = {'authorization': 'LOFTY_PM_AUTHORIZATION', 'x-amz-date': 'LOFTY_PM_AMZ_DATE', 'x-amz-security-token': 'LOFTY_PM_AMZ_SECURITY_TOKEN', 'x-lofty-app-version': 'LOFTY_PM_APP_VERSION'}
 
-def load_json(path): return json.loads(Path(path).read_text())
+def load_json(path):
+    file_path = Path(path)
+    if not file_path.exists():
+        now = dt.datetime.now()
+        return {'year': str(now.year), 'month': str(now.month)}
+    return json.loads(file_path.read_text())
 def merge_patch(base, updates):
     if not isinstance(base, dict) or not isinstance(updates, dict): return updates
     out = dict(base)

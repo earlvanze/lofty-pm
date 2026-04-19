@@ -2,14 +2,16 @@
 import argparse, json, re, subprocess, sys, tempfile
 from pathlib import Path
 
+from lofty_pm_paths import load_property_map
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 MAP_FILE = SCRIPT_DIR.parent / 'config' / 'property_update_map.json'
 WRITER = SCRIPT_DIR / 'write_property_update_md.py'
 
 
 def load_map():
-    data = json.loads(MAP_FILE.read_text())
-    return data.get('properties', [])
+    data = load_property_map(MAP_FILE)
+    return data.get('properties', []) if isinstance(data, dict) else data
 
 
 def norm(s):

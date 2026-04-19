@@ -28,6 +28,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from lofty_pm_paths import load_property_map
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 CAPTURE = SCRIPT_DIR / 'capture_lofty_auth_via_cdp.py'
 
@@ -291,7 +293,7 @@ def main():
             print("ERROR: --property-map required for batch mode")
             return 1
         
-        property_list = load_json(args.property_map)
+        property_list = load_property_map(args.property_map)
         props = property_list.get('properties', []) if isinstance(property_list, dict) else property_list
         
         print(f"Processing {len(props)} properties in batch mode...")

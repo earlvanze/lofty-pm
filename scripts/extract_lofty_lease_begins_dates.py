@@ -2,12 +2,13 @@
 import argparse
 import datetime as dt
 import json
-import os
 import re
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
+
+from lofty_pm_paths import WORKSPACE_ROOT, REAL_ESTATE_ROOT, load_property_map
 
 DATE_TOKEN_RE = re.compile(r'\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b')
 DATE_RANGE_RE = re.compile(
@@ -20,12 +21,10 @@ DOCX_CREATED_RE = re.compile(r'<dcterms:created[^>]*>([^<]+)</dcterms:created>',
 MONTH_NAME_DATE_RE = re.compile(r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:\s*(?:st|nd|rd|th))?\s*,\s*(\d{4})', re.I)
 TERM_RE = re.compile(r'beginning\s+(.{1,40}?)\s+and\s+ending\s+(.{1,40}?)(?:\.|\n)', re.I)
 STR_EXCLUDE_RE = re.compile(r'\b724\b')
-WORKSPACE_ROOT = Path(os.environ.get('LOFTY_PM_WORKSPACE_ROOT') or Path(__file__).resolve().parents[3])
-REAL_ESTATE_ROOT = Path(os.environ.get('LOFTY_PM_REAL_ESTATE_ROOT') or (WORKSPACE_ROOT / 'Dropbox' / 'Real Estate'))
 
 
 def load_json(path: Path):
-    data = json.loads(path.read_text())
+    data = load_property_map(path)
     if not isinstance(data, dict):
         return data
     properties = list(data.get('properties') or [])

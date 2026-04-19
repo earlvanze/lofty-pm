@@ -68,12 +68,23 @@ Execution order:
 ### MCP server surface
 - `src/lofty_pm_mcp/server.py`
   - exposes the core Lofty PM flows as MCP tools
-  - wraps live manager-property fetches, payload building, save/send mutations, and lease date backfills
+  - wraps live manager-property fetches, payload building, update writing/publishing, save/send mutations, and lease date backfills
 - `pyproject.toml`
   - packages the repo as an installable MCP server entry point: `lofty-pm-mcp`
 - environment notes
   - set `LOFTY_PM_WORKSPACE_ROOT` when the Dropbox/Real Estate corpus lives outside the repo checkout
   - optionally set `LOFTY_PM_REAL_ESTATE_ROOT` directly to override the property-document search root
+  - `config/property_update_map.json` now stores `${LOFTY_PM_WORKSPACE_ROOT}` placeholders instead of one machine's absolute paths
+
+### Initial MCP tools
+- `get_manager_properties`
+- `build_property_payloads`
+- `write_property_update`
+- `publish_latest_property_update`
+- `update_manager_property`
+- `send_property_updates`
+- `extract_lease_begins_dates`
+- `update_lease_begins_dates`
 
 ### Recommended one-shot flow
 

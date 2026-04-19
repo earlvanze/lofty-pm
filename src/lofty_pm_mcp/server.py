@@ -91,6 +91,40 @@ if FastMCP is not None:
         )
 
     @mcp.tool()
+    def write_property_update(
+        property_query: str,
+        text: str,
+        date: str | None = None,
+        property_map: str | None = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Write a canonical dated entry into a property's UPDATES.md."""
+        return service.write_property_update(
+            property_query=property_query,
+            text=text,
+            date=date,
+            property_map=property_map,
+            dry_run=dry_run,
+        )
+
+    @mcp.tool()
+    def publish_latest_property_update(
+        property_query: str,
+        property_map: str | None = None,
+        dry_run: bool = False,
+        close_extra_tabs: bool = True,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Push the canonical property update history to Lofty and optionally send owner email."""
+        return service.publish_latest_property_update(
+            property_query=property_query,
+            property_map=property_map,
+            dry_run=dry_run,
+            close_extra_tabs=close_extra_tabs,
+            force=force,
+        )
+
+    @mcp.tool()
     def extract_lease_begins_dates(
         property_query: str | None = None,
         multi_date_strategy: str = "ambiguous",

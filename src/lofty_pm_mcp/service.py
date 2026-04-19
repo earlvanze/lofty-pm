@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import json
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -15,7 +16,10 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import build_lofty_pm_payloads as payload_builder  # type: ignore
 import extract_lofty_lease_begins_dates as lease_extract  # type: ignore
+from lofty_pm_paths import load_property_map as load_resolved_property_map  # type: ignore
+import publish_latest_update_to_lofty as publisher  # type: ignore
 import update_lofty_pm_property as replay  # type: ignore
+import write_property_update_md as update_writer  # type: ignore
 
 DEFAULT_PROPERTY_MAP = REPO_ROOT / "config" / "property_update_map.json"
 STATE_DIR = REPO_ROOT / "state"
@@ -27,7 +31,17 @@ class LoftyPmError(RuntimeError):
 
 
 def _load_property_map(path: str | None = None) -> list[dict[str, Any]]:
-    return lease_extract.load_json(Path(path or DEFAULT_PROPERTY_MAP))
+    data = load_resolved_property_map(Path(path or DEFAULT_PROPERTY_MAP))
+    if isinstance(data, dict):
+        return list(data.get("properties") or [])
+    return list(data)
+
+
+def _load_property_candidates(path: str | None = None) -> list[dict[str, Any]]:
+    data = load_resolved_property_map(Path(path or DEFAULT_PROPERTY_MAP))
+    if isinstance(data, dict):
+        return list(data.get("properties") or []) + list(data.get("unresolved") or [])
+    return list(data)
 
 
 def _default_year_month(year: int | None, month: int | None) -> tuple[str, str]:
@@ -40,6 +54,27 @@ def _request_json(method: str, endpoint: str, headers: dict[str, str], payload: 
     if not response.ok:
         raise LoftyPmError(f"Lofty request failed: {response.status_code} {response.text[:1000]}")
     return response.json()
+
+
+def _find_mapped_property(property_query: str, property_map: str | None = None) -> dict[str, Any]:
+    props = _load_property_map(property_map)
+    key = property_query.lower()
+    for prop in props:
+        candidates = [
+            prop.get("property_name", ""),
+            prop.get("full_address", ""),
+            prop.get("assetUnit", ""),
+            prop.get("lofty_property_id", ""),
+            prop.get("slug", ""),
+            prop.get("updates_md", ""),
+        ]
+        for candidate in candidates:
+            if not candidate:
+                continue
+            lowered = str(candidate).lower()
+            if key == lowered or key in lowered:
+                return prop
+    raise LoftyPmError(f"No mapped property matched {property_query!r}")
 
 
 def get_manager_properties(
@@ -179,13 +214,173 @@ def send_property_updates(
     )
 
 
+def write_property_update(
+    property_query: str,
+    text: str,
+    date: str | None = None,
+    property_map: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    prop = _find_mapped_property(property_query, property_map)
+    if not prop.get("updates_md"):
+        raise LoftyPmError(f"Mapped property {property_query!r} does not have an updates_md target")
+    body = update_writer.clean_text(text)
+    if not body:
+        raise LoftyPmError("Empty update text")
+    update_date = dt.date.fromisoformat(date) if date else dt.date.today()
+    header = f'- Property Update ({update_writer.slugify_date(update_date)}):'
+    entry_body = f'{header}\n{body}'.strip()
+    entry = f'## {update_date.isoformat()}\n\n{entry_body}\n\n'
+
+    path = Path(prop["updates_md"])
+    update_writer.ensure_updates_file(path)
+    existing = path.read_text()
+    entries = update_writer.parse_entries(existing)
+    for existing_entry in entries:
+        if existing_entry["date"] == update_date.isoformat() and update_writer.clean_text(existing_entry["body"]) == update_writer.clean_text(entry_body):
+            return {
+                "property_name": prop["property_name"],
+                "lofty_property_id": prop["lofty_property_id"],
+                "file": str(path),
+                "date": update_date.isoformat(),
+                "header": header,
+                "deduped": True,
+                "dry_run": dry_run,
+            }
+
+    if existing.startswith("# Property Updates"):
+        rest = existing[len("# Property Updates"):].lstrip("\n")
+        rendered = "# Property Updates\n\n" + entry + rest
+    else:
+        rendered = "# Property Updates\n\n" + entry + existing
+    if not dry_run:
+        path.write_text(rendered)
+    return {
+        "property_name": prop["property_name"],
+        "lofty_property_id": prop["lofty_property_id"],
+        "file": str(path),
+        "date": update_date.isoformat(),
+        "header": header,
+        "deduped": False,
+        "dry_run": dry_run,
+    }
+
+
+def publish_latest_property_update(
+    property_query: str,
+    property_map: str | None = None,
+    dry_run: bool = False,
+    close_extra_tabs: bool = True,
+    force: bool = False,
+) -> dict[str, Any]:
+    prop = _find_mapped_property(property_query, property_map)
+    if not prop.get("updates_md"):
+        raise LoftyPmError(f"Mapped property {property_query!r} does not have an updates_md target")
+    md_path = Path(prop["updates_md"])
+    entries = publisher.parse_entries(md_path.read_text())
+    latest = entries[0]
+    latest_digest = publisher.digest_for_entry(prop, latest)
+    loft_field_text = publisher.combined_lofty_updates(entries)
+    field_digest = publisher.digest_for_field(prop, loft_field_text)
+
+    sp = publisher.state_path(prop)
+    state = publisher.load_state(sp)
+    bootstrap_seeded = False
+    if not state.get("last_sent_digest") and not force:
+        state["last_sent_digest"] = latest_digest
+        state["last_sent_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds") + "Z"
+        bootstrap_seeded = True
+
+    last_sent_at = publisher.parse_iso_z(state.get("last_sent_at"))
+    now = dt.datetime.now(dt.timezone.utc)
+    weekly_window_open = force or last_sent_at is None or (now - last_sent_at) >= dt.timedelta(days=publisher.SEND_INTERVAL_DAYS)
+    unsent_entries = publisher.collect_unsent_entries(prop, entries, None if force else state.get("last_sent_digest"))
+    batched_send_text = publisher.combined_lofty_updates(unsent_entries)
+    should_send = bool(batched_send_text) and weekly_window_open and not bootstrap_seeded
+
+    with tempfile.TemporaryDirectory() as td:
+        save_patch_file = Path(td) / "save.patch.json"
+        save_payload_file = Path(td) / "save.payload.json"
+        send_payload_file = Path(td) / "send.payload.json"
+        save_patch_file.write_text(json.dumps({"updates": loft_field_text}, indent=2))
+
+        bootstrap_cmd = [
+            sys.executable,
+            str(publisher.BOOTSTRAP),
+            "--property-id", prop["lofty_property_id"],
+            "--property", prop["property_name"],
+            "--get-manager-properties-payload-file", prop["get_manager_properties_payload_file"],
+            "--save-payload-file", str(save_payload_file),
+            "--send-payload-file", str(send_payload_file),
+        ]
+        if close_extra_tabs:
+            bootstrap_cmd.append("--close-extra-tabs")
+        if dry_run:
+            bootstrap_cmd.append("--dry-run")
+        subprocess.run(bootstrap_cmd, check=True)
+
+        cmd = [
+            sys.executable,
+            str(publisher.WRAPPER),
+            "--get-manager-properties-payload-file", prop["get_manager_properties_payload_file"],
+            "--save-payload-file", str(save_payload_file),
+            "--save-patch-file", str(save_patch_file),
+            "--send-payload-file", str(send_payload_file),
+            "--property-id", prop["lofty_property_id"],
+        ]
+        if should_send:
+            cmd += ["--updates-diff", batched_send_text]
+        else:
+            cmd += ["--skip-send"]
+        if close_extra_tabs:
+            cmd.append("--close-extra-tabs")
+        if dry_run:
+            cmd.append("--dry-run")
+        subprocess.run(cmd, check=True)
+
+    if not dry_run:
+        state.update({
+            "property_name": prop["property_name"],
+            "lofty_property_id": prop["lofty_property_id"],
+            "slug": prop.get("slug"),
+            "updates_md": str(md_path),
+            "last_entry_date": latest["date"],
+            "last_posted_digest": field_digest,
+            "last_posted_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds") + "Z",
+            "last_posted_text": loft_field_text,
+        })
+        if should_send:
+            state.update({
+                "last_sent_digest": latest_digest,
+                "last_sent_text": batched_send_text,
+                "last_sent_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds") + "Z",
+                "last_sent_entry_count": len(unsent_entries),
+            })
+        publisher.save_state(sp, state)
+
+    return {
+        "property_name": prop["property_name"],
+        "lofty_property_id": prop["lofty_property_id"],
+        "updates_md": str(md_path),
+        "state_file": str(sp),
+        "latest_date": latest["date"],
+        "latest_digest": latest_digest,
+        "field_digest": field_digest,
+        "bootstrap_seeded": bootstrap_seeded,
+        "weekly_window_open": weekly_window_open,
+        "unsent_entries": len(unsent_entries),
+        "will_send": should_send,
+        "dry_run": dry_run,
+    }
+
+
 def extract_lease_begins_dates(
     property_query: str | None = None,
     multi_date_strategy: str = "ambiguous",
     status: str | None = None,
     property_map: str | None = None,
 ) -> dict[str, Any]:
-    props = lease_extract.filter_properties(_load_property_map(property_map), property_query)
+    props = lease_extract.filter_properties(_load_property_candidates(property_map), property_query)
     if property_query and not props:
         raise LoftyPmError(f"No property matched {property_query!r}")
 
@@ -209,7 +404,7 @@ def update_lease_begins_dates(
     property_map: str | None = None,
     output_dir: str | None = None,
 ) -> dict[str, Any]:
-    props = lease_extract.filter_properties(_load_property_map(property_map), property_query)
+    props = lease_extract.filter_properties(_load_property_candidates(property_map), property_query)
     if property_query and not props:
         raise LoftyPmError(f"No property matched {property_query!r}")
 

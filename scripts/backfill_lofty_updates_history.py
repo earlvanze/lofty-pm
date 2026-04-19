@@ -2,17 +2,19 @@
 import argparse, datetime as dt, json, re, sys
 from pathlib import Path
 
+from lofty_pm_paths import load_property_map, TMP_ROOT
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from update_lofty_pm_property import capture_fresh, build_headers, validate_auth, request
 
 MAP_FILE = SCRIPT_DIR.parent / 'config' / 'property_update_map.json'
 GMP_ENDPOINT = 'https://api.lofty.ai/prod/property-managers/v2/get-manager-properties'
-GMP_PAYLOAD_FILE = Path('/home/umbrel/.openclaw/workspace/tmp/lofty-pm-gmp-test/manager.get-manager-properties.payload.json')
+GMP_PAYLOAD_FILE = TMP_ROOT / 'lofty-pm-gmp-test' / 'manager.get-manager-properties.payload.json'
 
 
 def load_map(path: Path):
-    data = json.loads(path.read_text())
+    data = load_property_map(path)
     return data['properties'] if isinstance(data, dict) and 'properties' in data else data
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, os, sys, tempfile
+import argparse, datetime as dt, json, os, sys, tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -10,7 +10,11 @@ ENDPOINT = 'https://api.lofty.ai/prod/property-managers/v2/get-manager-propertie
 
 
 def load_json(path):
-    return json.loads(Path(path).read_text())
+    file_path = Path(path)
+    if not file_path.exists():
+        now = dt.datetime.now()
+        return {'year': str(now.year), 'month': str(now.month)}
+    return json.loads(file_path.read_text())
 
 
 def find_property(data, property_id=None, key=None):

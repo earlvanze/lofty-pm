@@ -2,6 +2,8 @@
 import argparse, datetime as dt, hashlib, json, re, tempfile, subprocess, sys
 from pathlib import Path
 
+from lofty_pm_paths import load_property_map
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 WRAPPER = SCRIPT_DIR / 'save_and_send_lofty_pm_update.py'
 BOOTSTRAP = SCRIPT_DIR / 'build_lofty_pm_payloads.py'
@@ -10,7 +12,7 @@ SEND_INTERVAL_DAYS = 7
 
 
 def load_map(path):
-    data = json.loads(Path(path).read_text())
+    data = load_property_map(path)
     props = data['properties'] if isinstance(data, dict) and 'properties' in data else data
     return props
 
