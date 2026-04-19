@@ -40,6 +40,88 @@ Execution order:
 - optionally close extra Lofty tabs
 - do not use relay
 
+## Decision tree for small models (≤35B parameters)
+
+When running on a small or MoE model, follow these decision rules exactly. Do not improvise or chain multiple operations.
+
+### Step 1: What do you need to do?
+
+```
+NEED TO READ PROPERTY DATA?
+  → use: webpack_get_manager_properties
+     args: {year: 2026, month: 4}
+     returns: list of all properties with fields
+     NO BROWSER NEEDED if webpack tab is open
+
+NEED TO UPDATE ONE FIELD ON ONE PROPERTY?
+  → use: webpack_update_property
+     args: {property_id: "01HP0C6P...", patch: {lease_begins_date: "04/13/2025"}}
+     NO BROWSER NEEDED if webpack tab is open
+
+NEED TO READ DESCRIPTION.md?
+  → use: read_description_md
+     args: {property_query: "Wild Olive"}
+     reads from local Dropbox files
+
+NEED TO WRITE DESCRIPTION.md?
+  → use: write_description_md
+     args: {property_query: "Wild Olive", sections: {"Occupancy Status": "..."}}
+     OR: {property_query: "Wild Olive", content: "full file content"}
+
+NEED TO ADD AN UPDATE?
+  → use: write_property_update
+     args: {property_query: "49 Bannbury", text: "update text", date: "04/19/2026"}
+
+NEED TO PUBLISH UPDATE TO LOFTY + EMAIL OWNER?
+  → use: publish_latest_property_update
+     args: {property_query: "49 Bannbury"}
+
+NEED TO INGEST ATLAS RELAY TEXT?
+  → use: ingest_and_publish_atlas_relay_update
+     args: {text: "full relay text", property_query: "Wild Olive"}
+
+NEED TO CHECK/PATCH LEASE BEGINS DATES?
+  → audit: extract_lease_begins_dates {property_query: "..."}
+  → apply: update_lease_begins_dates {property_query: "...", apply: true}
+
+NEED TO REBUILD THE PROPERTY MAP?
+  → use: rebuild_property_map {dry_run: true}  (check first)
+  → then: rebuild_property_map {apply: true}   (to write)
+
+NEED P&L DATA?
+  → config: webpack_get_pl_cutoff_config {}
+  → entry: webpack_get_pl_entry {property_id: "...", year: 2026, month: 4}
+```
+
+### Step 2: NEVER do these
+
+```
+NEVER: chain 3+ tool calls without returning intermediate results to the user
+NEVER: use update_manager_property (use webpack_update_property instead)
+NEVER: use get_manager_properties (use webpack_get_manager_properties instead)
+NEVER: use browser automation for tasks that have a dedicated MCP tool
+NEVER: guess property_id — always look it up via webpack_get_manager_properties first
+NEVER: call rebuild_property_map with apply=true without a dry_run first
+NEVER: call write_description_md with content= unless you have the FULL file text
+```
+
+### Step 3: Error recovery
+
+```
+WEBPACK TOOLS RETURN ERROR?
+  → Check if Brave is running: curl -s http://127.0.0.1:9222/json/version
+  → If not: launch Brave headless (see scripts/lofty_cdp.py)
+  → If Brave is up but tab is on login: user must re-authenticate
+
+PROPERTY NOT FOUND?
+  → Use webpack_get_manager_properties first to get the property_id
+  → Then use the exact ID in subsequent calls
+
+WRITE CONFLICTS?
+  → read_description_md first to see current content
+  → Use sections= mode instead of content= for partial updates
+```
+
 ## Scripts
 
 ### Core helpers
@@ -73,36 +155,45 @@ Execution order:
   - wraps live manager-property fetches, Atlas Relay ingest, property-map rebuilds, update writing/publishing, save/send mutations, and lease date backfills
 - `scripts/rebuild_property_update_map.py`
   - rebuilds `config/property_update_map.json` from live Lofty manager properties plus the Dropbox Real Estate corpus
+- `scripts/generic_pm_matcher.py`
+  - parameterized fuzzy matcher template for adapting to other PM portfolios
+  - same Lofty API, different Dropbox corpus structure per PM
 - `pyproject.toml`
   - packages the repo as an installable MCP server entry point: `lofty-pm-mcp`
 - environment notes
   - set `LOFTY_PM_WORKSPACE_ROOT` when the Dropbox/Real Estate corpus lives outside the repo checkout
   - optionally set `LOFTY_PM_REAL_ESTATE_ROOT` directly to override the property-document search root
-  - `config/property_update_map.json` now stores `${LOFTY_PM_WORKSPACE_ROOT}` placeholders instead of one machine's absolute paths
+  - `config/property_update_map.json` is gitignored (contains real property data)
+  - `config/property_update_map.template.json` provides the structure template
 
-### MCP tools
-- `get_manager_properties` — fetch live Lofty manager property list
-- `build_property_payloads` — build save/send payloads for a property
-- `ingest_atlas_relay_update` — clean Atlas Relay text and write into UPDATES.md
-- `ingest_and_publish_atlas_relay_update` — end-to-end ingest + publish to Lofty
-- `write_property_update` — write a canonical dated entry into a property's UPDATES.md
-- `publish_latest_property_update` — push update history to Lofty and optionally send owner email
-- `rebuild_property_map` — rebuild property_update_map.json from live Lofty + corpus
-- `update_manager_property` — apply an update-manager-property mutation via runtime
-- `send_property_updates` — send the owner update email for a property
-- `webpack_get_manager_properties` — fetch all properties via CDP webpack injection (no auth capture)
-- `webpack_update_property` — update a property via CDP webpack injection (no auth capture)
-- `extract_property_data` — extract property details and financials from Lofty owner pages
-- `backfill_updates_history` — backfill UPDATES.md history from live Lofty property data
-- `read_description_md` — read and parse DESCRIPTION.md into sections
-- `write_description_md` — write/update DESCRIPTION.md (full replace or section merge)
-- `push_property_data` — push local DETAILS.md / FINANCIALS.md data back to Lofty
-- `webpack_get_pl_cutoff_config` — get P\u0026L cutoff configuration
-- `webpack_get_pl_entry` — get a P\u0026L entry for a property
-- `webpack_create_pl_entry` — create a P\u0026L entry via webpack injection
-- `webpack_update_pl_entry` — update a P\u0026L entry via webpack injection (SP)
-- `extract_lease_begins_dates` — audit lease_begins_date candidates from DESCRIPTION.md
-- `update_lease_begins_dates` — prepare or apply lease_begins_date updates
+### MCP tools (22 total)
+
+**Prefer webpack tools over auth-capture tools.** Webpack tools (12-13, 19-22) work without auth header capture and are more reliable.
+
+| # | Tool | What | Best for |
+|---|------|------|----------|
+| 1 | `get_manager_properties` | Fetch property list (auth-capture) | Legacy — prefer #12 |
+| 2 | `build_property_payloads` | Build save/send payloads | Legacy flow |
+| 3 | `update_manager_property` | Apply mutation (runtime-direct) | Legacy — prefer #13 |
+| 4 | `send_property_updates` | Send owner update email | After #8 |
+| 5 | `ingest_atlas_relay_update` | Atlas text → UPDATES.md | Discord relay ingest |
+| 6 | `ingest_and_publish_atlas_relay_update` | End-to-end ingest + publish | One-shot Atlas relay |
+| 7 | `write_property_update` | Write dated entry to UPDATES.md | Manual update entry |
+| 8 | `publish_latest_property_update` | Push updates + send email | After #7 |
+| 9 | `rebuild_property_map` | Rebuild map from live + corpus | After adding properties |
+| 10 | `extract_lease_begins_dates` | Audit lease dates from DESCRIPTION.md | Lease date audit |
+| 11 | `update_lease_begins_dates` | Apply lease date patches | After #10 |
+| 12 | **`webpack_get_manager_properties`** | Fetch properties (no auth) | **Default for reads** |
+| 13 | **`webpack_update_property`** | Update property (no auth) | **Default for writes** |
+| 14 | `extract_property_data` | Scrape DETAILS.md + FINANCIALS.md | Lofty → local |
+| 15 | `backfill_updates_history` | Backfill UPDATES.md from live data | History sync |
+| 16 | `read_description_md` | Read/parse DESCRIPTION.md | Local read |
+| 17 | `write_description_md` | Write/update DESCRIPTION.md | Local write |
+| 18 | `push_property_data` | Push DETAILS/FINANCIALS → Lofty | Local → Lofty |
+| 19 | `webpack_get_pl_cutoff_config` | Get P&L cutoff config | P&L config |
+| 20 | `webpack_get_pl_entry` | Get P&L entry for a property | P&L read |
+| 21 | `webpack_create_pl_entry` | Create P&L entry | P&L write |
+| 22 | `webpack_update_pl_entry` | Update P&L entry | P&L write |
 
 ### Recommended one-shot flow
 
@@ -127,6 +218,8 @@ Keep decisions low-ambiguity:
 - no blind loops
 
 This skill is optimized for deterministic execution by smaller models as long as Brave CDP and an authenticated Lofty session exist.
+
+**For models ≤35B (including MoE):** Use only the MCP tools listed in the decision tree above. Each tool does exactly one thing. Call one tool, return the result, then decide the next step. Never chain more than 2 tool calls without user confirmation.
 
 ## References
 

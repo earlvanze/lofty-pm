@@ -17,8 +17,15 @@ if FastMCP is not None:
         "lofty-pm",
         instructions=(
             "Lofty PM MCP server for property-manager automation. "
-            "Use these tools to inspect manager properties, build or apply property updates, "
-            "send owner update emails, and backfill lease_begins_date from the Lofty PM skill workflows."
+            "PREFERRED TOOLS (no auth capture needed): webpack_get_manager_properties, webpack_update_property, "
+            "webpack_get_pl_entry, webpack_create_pl_entry, webpack_update_pl_entry, webpack_get_pl_cutoff_config. "
+            "For small models: call ONE tool at a time. Never chain 3+ calls without returning results first. "
+            "To read properties: webpack_get_manager_properties. "
+            "To update a field: webpack_update_property with property_id and patch dict. "
+            "To read/write DESCRIPTION.md: read_description_md / write_description_md. "
+            "To add an update: write_property_update then publish_latest_property_update. "
+            "To ingest Atlas Relay: ingest_and_publish_atlas_relay_update. "
+            "Never guess property_id — look it up with webpack_get_manager_properties first."
         ),
     )
 
@@ -30,7 +37,7 @@ if FastMCP is not None:
         property_query: str | None = None,
         close_extra_tabs: bool = True,
     ) -> dict[str, Any]:
-        """Fetch the live Lofty manager property list, or one matched property."""
+        """LEGACY (prefer webpack_get_manager_properties): Fetch the live Lofty manager property list, or one matched property. Requires auth capture."""
         return service.get_manager_properties(
             year=year,
             month=month,
@@ -64,7 +71,7 @@ if FastMCP is not None:
         property_query: str | None = None,
         close_extra_tabs: bool = True,
     ) -> dict[str, Any]:
-        """Apply an update-manager-property mutation through Lofty's in-page runtime."""
+        """LEGACY (prefer webpack_update_property): Apply an update-manager-property mutation through Lofty's in-page runtime. Requires auth capture."""
         return service.update_manager_property(
             property_id=property_id,
             payload=payload,
@@ -221,7 +228,7 @@ if FastMCP is not None:
         month: int | None = None,
         property_id: str | None = None,
     ) -> dict[str, Any]:
-        """Fetch all manager properties via CDP webpack injection (no auth capture needed)."""
+        """PREFERRED: Fetch all Lofty manager properties via webpack (no auth capture). Returns property list with IDs, addresses, and fields. Use this instead of get_manager_properties."""
         return service.webpack_get_manager_properties(
             year=year,
             month=month,
@@ -233,7 +240,7 @@ if FastMCP is not None:
         property_id: str,
         patch: dict[str, Any],
     ) -> dict[str, Any]:
-        """Update a Lofty property via CDP webpack injection (no auth capture needed)."""
+        """PREFERRED: Update a Lofty property via webpack injection (no auth capture). Pass property_id and a patch dict like {\"lease_begins_date\": \"05/01/2025\"}. Use this instead of update_manager_property."""
         return service.webpack_update_property(
             property_id=property_id,
             patch=patch,
@@ -273,7 +280,7 @@ if FastMCP is not None:
         property_id: str | None = None,
         property_map: str | None = None,
     ) -> dict[str, Any]:
-        """Read and parse a property's DESCRIPTION.md into sections."""
+        """Read and parse a property's DESCRIPTION.md into sections (opening, Offering Details, Property Details, etc). Use sections= mode for partial updates, content= only for full replacement."""
         return service.read_description_md(
             property_query=property_query,
             property_id=property_id,
@@ -290,7 +297,7 @@ if FastMCP is not None:
         opening: str | None = None,
         dry_run: bool = False,
     ) -> dict[str, Any]:
-        """Write or update a property's DESCRIPTION.md (full replace or section merge)."""
+        """Write or update DESCRIPTION.md. Use sections={\"Occupancy Status\": \"new text\"} for partial updates. Use content=\"full text\" only when replacing the entire file. DRY-RUN FIRST with dry_run=true."""
         return service.write_description_md(
             property_query=property_query,
             property_id=property_id,
@@ -310,7 +317,7 @@ if FastMCP is not None:
         include_financials: bool = True,
         dry_run: bool = False,
     ) -> dict[str, Any]:
-        """Push local DETAILS.md / FINANCIALS.md data back to Lofty."""
+        """Push local DETAILS.md / FINANCIALS.md data back to Lofty. Reads local files, parses fields, applies patch via webpack. Set dry_run=true first to preview changes."""
         return service.push_property_data(
             property_query=property_query,
             property_id=property_id,
@@ -322,7 +329,7 @@ if FastMCP is not None:
 
     @mcp.tool()
     def webpack_get_pl_cutoff_config() -> dict[str, Any]:
-        """Get P\u0026L cutoff configuration from Lofty."""
+        """Get P&L cutoff config (cutoff day, time, timezone). Lightweight read, no property_id needed."""
         return service.webpack_get_pl_cutoff_config()
 
     @mcp.tool()
@@ -331,7 +338,7 @@ if FastMCP is not None:
         year: int | None = None,
         month: int | None = None,
     ) -> dict[str, Any]:
-        """Get a P\u0026L entry for a property."""
+        """Get a single P&L entry for a property. Requires property_id, optional year/month."""
         return service.webpack_get_pl_entry(
             property_id=property_id,
             year=year,
@@ -345,7 +352,7 @@ if FastMCP is not None:
         month: int | None = None,
         pl_entry: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create a P\u0026L entry for a property via webpack injection."""
+        """Create a new P&L entry for a property. Requires property_id. Optional year/month and pl_entry dict."""
         return service.webpack_create_pl_entry(
             property_id=property_id,
             year=year,
@@ -360,7 +367,7 @@ if FastMCP is not None:
         month: int | None = None,
         pl_entry: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Update a P\u0026L entry for a property via webpack injection."""
+        """Update an existing P&L entry for a property. Requires property_id. Pass year/month and pl_entry dict with fields to update."""
         return service.webpack_update_pl_entry(
             property_id=property_id,
             year=year,
