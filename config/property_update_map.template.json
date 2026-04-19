@@ -1,0 +1,18 @@
+{
+  "properties": [
+    {
+      "property_name": "<PROPERTY_NAME>",
+      "full_address": "<ADDRESS>",
+      "assetUnit": "<LFTY_UNIT>",
+      "lofty_property_id": "<LOFTY_ID>",
+      "updates_md": "${LOFTY_PM_WORKSPACE_ROOT}/Dropbox/Real Estate/<STATE>/<PROPERTY>/Public/Updates/UPDATES.md",
+      "slug": "<SLUG>"
+    }
+  ],
+  "metadata": {
+    "live_properties": 0,
+    "corpus_dirs": 0,
+    "resolved": 0,
+    "unresolved_count": 0
+  }
+}

@@ -155,6 +155,7 @@ mcporter call "lofty-pm.read_description_md" --args '{"property_query":"49 Bannb
 | 19 | `webpack_get_pl_cutoff_config` | Get P\u0026L cutoff config | Lofty read |
 | 20 | `webpack_get_pl_entry` | Get P\u0026L entry for a property | Lofty read |
 | 21 | `webpack_create_pl_entry` | Create P\u0026L entry | Lofty write |
+| 22 | `webpack_update_pl_entry` | Update P\u0026L entry (SP) | Lofty write |
 
 ### Data Round-Trip Coverage
 
@@ -217,6 +218,19 @@ python3 scripts/read_write_description_md.py write --property "Wild Olive" --sec
 # Push local data to Lofty
 python3 scripts/push_property_data_to_lofty.py --property "Wild Olive" --dry-run
 ```
+
+## Security
+
+**No secrets in this repo.** All auth is handled via:
+- Browser session cookies (webpack injection — no auth headers captured)
+- Environment variables (`LOFTY_PM_AUTHORIZATION`, `LOFTY_PM_AMZ_DATE`, etc.) for the older API path
+- The `config/property_update_map.json` is gitignored and contains real property addresses/IDs — a template is provided at `config/property_update_map.template.json`
+
+This tool doesn’t make Lofty easier to hack. It:
+- Uses your existing authenticated browser session (no credential extraction)
+- Calls the same API endpoints the Lofty frontend calls
+- Doesn’t expose any Lofty API secrets, AWS sig keys, or private keys
+- Module IDs (51046) are just webpack chunk hashes, not security-sensitive
 
 ## License
 

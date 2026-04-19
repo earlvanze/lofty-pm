@@ -353,6 +353,21 @@ if FastMCP is not None:
             pl_entry=pl_entry,
         )
 
+    @mcp.tool()
+    def webpack_update_pl_entry(
+        property_id: str,
+        year: int | None = None,
+        month: int | None = None,
+        pl_entry: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Update a P\u0026L entry for a property via webpack injection."""
+        return service.webpack_update_pl_entry(
+            property_id=property_id,
+            year=year,
+            month=month,
+            pl_entry=pl_entry,
+        )
+
 
 def main() -> None:
     if FastMCP is None:  # pragma: no cover

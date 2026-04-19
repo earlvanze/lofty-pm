@@ -98,6 +98,7 @@ Execution order:
 - `webpack_get_pl_cutoff_config` — get P\u0026L cutoff configuration
 - `webpack_get_pl_entry` — get a P\u0026L entry for a property
 - `webpack_create_pl_entry` — create a P\u0026L entry via webpack injection
+- `webpack_update_pl_entry` — update a P\u0026L entry via webpack injection (SP)
 - `extract_lease_begins_dates` — audit lease_begins_date candidates from DESCRIPTION.md
 - `update_lease_begins_dates` — prepare or apply lease_begins_date updates
 

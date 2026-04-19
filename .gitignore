@@ -6,3 +6,15 @@ build/
 *.egg-info/
 state/*
 !state/.gitkeep
+
+# Property data with real addresses, IDs, and file paths
+config/property_update_map.json
+
+# Auth headers and captured tokens
+*.headers.json
+*.har
+*.payload.json
+
+# Temp/build artifacts
+tmp/
+.env
