@@ -9,11 +9,13 @@ Use this skill for direct Brave CDP Lofty property-management automation.
 
 ## Canonical execution model
 
-Title-state guard:
-- Treat `Confirm Email | Lofty AI` as a title misnomer when the Property Management app content is present in-page.
-- Do not treat the title alone as an auth failure.
-- Trust live PM page evidence instead: `/property-owners`, `/property-owners/edit/{propertyId}`, property list rows, edit form fields, and `Save changes`.
-- Only treat the Lofty PM context as unauthenticated if the PM app content is absent or the session is actually redirected to a login/blocking state.
+**Title misnomer guard:**
+- Any page title text — `Password Recovery`, `Confirm Email`, `Log In`, or any other string — is a **misnomer** when the Property Management app content is actually present in-page.
+- Never treat the `<title>` alone as an auth failure or navigation error.
+- Trust **live PM page evidence** instead: `/property-owners` in the URL, property list rows, edit form fields, `Save changes` buttons, webpack module availability.
+- Only treat the session as unauthenticated if the PM app content is **absent** and the page is actually stuck on a login/blocking state (no PM content renders, repeated redirects to `/login`).
+
+This guard is critical because Lofty's SPA often sets the title to `Password Recovery | Lofty AI` or `Confirm Email | Lofty AI` even when the PM dashboard is fully loaded and functional — the title is set by a previous auth step and is never updated by the SPA router.
 
 Use deterministic scripts, not freeform browser clicking.
 
