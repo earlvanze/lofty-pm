@@ -239,6 +239,34 @@ if FastMCP is not None:
             patch=patch,
         )
 
+    @mcp.tool()
+    def extract_property_data(
+        property_query: str | None = None,
+        property_id: str | None = None,
+        batch: bool = False,
+        property_map: str | None = None,
+    ) -> dict[str, Any]:
+        """Extract property details and financials from Lofty owner pages."""
+        return service.extract_property_data(
+            property_query=property_query,
+            property_id=property_id,
+            batch=batch,
+            property_map=property_map,
+        )
+
+    @mcp.tool()
+    def backfill_updates_history(
+        property_query: str | None = None,
+        property_map: str | None = None,
+        dry_run: bool = True,
+    ) -> dict[str, Any]:
+        """Backfill UPDATES.md history from live Lofty property data."""
+        return service.backfill_updates_history(
+            property_query=property_query,
+            property_map=property_map,
+            dry_run=dry_run,
+        )
+
 
 def main() -> None:
     if FastMCP is None:  # pragma: no cover

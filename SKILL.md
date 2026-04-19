@@ -90,6 +90,8 @@ Execution order:
 - `send_property_updates` — send the owner update email for a property
 - `webpack_get_manager_properties` — fetch all properties via CDP webpack injection (no auth capture)
 - `webpack_update_property` — update a property via CDP webpack injection (no auth capture)
+- `extract_property_data` — extract property details and financials from Lofty owner pages
+- `backfill_updates_history` — backfill UPDATES.md history from live Lofty property data
 - `extract_lease_begins_dates` — audit lease_begins_date candidates from DESCRIPTION.md
 - `update_lease_begins_dates` — prepare or apply lease_begins_date updates
 

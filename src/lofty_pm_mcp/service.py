@@ -687,6 +687,74 @@ def webpack_update_property(
     return {"property_id": property_id, "patch": patch, "result": result}
 
 
+def extract_property_data(
+    property_query: str | None = None,
+    property_id: str | None = None,
+    batch: bool = False,
+    property_map: str | None = None,
+) -> dict[str, Any]:
+    """Extract property details and financials from Lofty owner pages.
+
+    Runs extract_lofty_property_data.py to scrape DETAILS.md and FINANCIALS.md
+    from live Lofty property pages.
+    """
+    cmd = [sys.executable, str(SCRIPTS_DIR / "extract_lofty_property_data.py")]
+    if batch:
+        cmd.append("--batch")
+    if property_map:
+        cmd.extend(["--property-map", property_map])
+    if property_id:
+        cmd.extend(["--property-id", property_id])
+    if property_query:
+        # Resolve to property_id from the map
+        props = _load_property_candidates(property_map)
+        matches = [p for p in props
+                    if property_query.lower() in (p.get("property_name") or "").lower()
+                    or property_query.lower() in (p.get("full_address") or "").lower()
+                    or property_query == p.get("lofty_property_id")]
+        if matches:
+            cmd.extend(["--property-id", matches[0]["lofty_property_id"]])
+        else:
+            raise LoftyPmError(f"No property found matching {property_query!r}")
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    return {
+        "returncode": result.returncode,
+        "stdout": result.stdout[-4000:] if result.stdout else "",
+        "stderr": result.stderr[-4000:] if result.stderr else "",
+        "success": result.returncode == 0,
+    }
+
+
+def backfill_updates_history(
+    property_query: str | None = None,
+    property_map: str | None = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Backfill UPDATES.md history from live Lofty property data.
+
+    Runs backfill_lofty_updates_history.py to populate UPDATES.md with
+    historical updates from Lofty.
+    """
+    cmd = [sys.executable, str(SCRIPTS_DIR / "backfill_lofty_updates_history.py")]
+    if property_map:
+        cmd.extend(["--property-map", property_map])
+    if property_query:
+        cmd.extend(["--property", property_query])
+    if dry_run:
+        cmd.append("--dry-run")
+    else:
+        cmd.append("--apply")
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    return {
+        "returncode": result.returncode,
+        "stdout": result.stdout[-4000:] if result.stdout else "",
+        "stderr": result.stderr[-4000:] if result.stderr else "",
+        "success": result.returncode == 0,
+    }
+
+
 def _ensure_gmp_payload(path: Path, year: int | None, month: int | None) -> None:
     if path.exists():
         return
