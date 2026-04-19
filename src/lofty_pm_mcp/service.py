@@ -21,6 +21,7 @@ import ingest_atlas_relay_update as atlas_ingest  # type: ignore
 from lofty_pm_paths import load_property_map as load_resolved_property_map  # type: ignore
 import publish_latest_update_to_lofty as publisher  # type: ignore
 import rebuild_property_update_map as map_rebuilder  # type: ignore
+import read_write_description_md as description_rw  # type: ignore
 import update_lofty_pm_property as replay  # type: ignore
 import write_property_update_md as update_writer  # type: ignore
 
@@ -724,6 +725,47 @@ def extract_property_data(
         "stderr": result.stderr[-4000:] if result.stderr else "",
         "success": result.returncode == 0,
     }
+
+
+def read_description_md(
+    property_query: str | None = None,
+    property_id: str | None = None,
+    property_map: str | None = None,
+) -> dict[str, Any]:
+    """Read and parse a property's DESCRIPTION.md."""
+    q = property_id or property_query
+    return description_rw.read_description_md(
+        property_query=q,
+        property_id=property_id,
+        property_map=property_map,
+    )
+
+
+def write_description_md(
+    property_query: str | None = None,
+    property_id: str | None = None,
+    property_map: str | None = None,
+    content: str | None = None,
+    sections: dict[str, str] | None = None,
+    opening: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Write or update a property's DESCRIPTION.md.
+
+    Modes:
+    - content=... : full replacement
+    - sections={...} and/or opening=... : merge into existing (section-level update)
+    """
+    q = property_id or property_query
+    return description_rw.write_description_md(
+        property_query=q,
+        property_id=property_id,
+        property_map=property_map,
+        content=content,
+        sections=sections,
+        opening=opening,
+        dry_run=dry_run,
+    )
 
 
 def backfill_updates_history(

@@ -92,6 +92,8 @@ Execution order:
 - `webpack_update_property` — update a property via CDP webpack injection (no auth capture)
 - `extract_property_data` — extract property details and financials from Lofty owner pages
 - `backfill_updates_history` — backfill UPDATES.md history from live Lofty property data
+- `read_description_md` — read and parse DESCRIPTION.md into sections
+- `write_description_md` — write/update DESCRIPTION.md (full replace or section merge)
 - `extract_lease_begins_dates` — audit lease_begins_date candidates from DESCRIPTION.md
 - `update_lease_begins_dates` — prepare or apply lease_begins_date updates
 

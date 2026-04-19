@@ -267,6 +267,40 @@ if FastMCP is not None:
             dry_run=dry_run,
         )
 
+    @mcp.tool()
+    def read_description_md(
+        property_query: str | None = None,
+        property_id: str | None = None,
+        property_map: str | None = None,
+    ) -> dict[str, Any]:
+        """Read and parse a property's DESCRIPTION.md into sections."""
+        return service.read_description_md(
+            property_query=property_query,
+            property_id=property_id,
+            property_map=property_map,
+        )
+
+    @mcp.tool()
+    def write_description_md(
+        property_query: str | None = None,
+        property_id: str | None = None,
+        property_map: str | None = None,
+        content: str | None = None,
+        sections: dict[str, str] | None = None,
+        opening: str | None = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Write or update a property's DESCRIPTION.md (full replace or section merge)."""
+        return service.write_description_md(
+            property_query=property_query,
+            property_id=property_id,
+            property_map=property_map,
+            content=content,
+            sections=sections,
+            opening=opening,
+            dry_run=dry_run,
+        )
+
 
 def main() -> None:
     if FastMCP is None:  # pragma: no cover
