@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 from . import __version__, service
 
@@ -13,6 +15,44 @@ else:
     _IMPORT_ERROR = None
 
 if FastMCP is not None:
+    # ---------------------------------------------------------------------------
+    # Shared parameter descriptions — single source of truth for small models
+    # ---------------------------------------------------------------------------
+    _P = {
+        "property_id": "Lofty property ID (e.g. '01J020EQJ0M9S7MXBZJQGMESWB'). Look up with webpack_get_manager_properties if unknown.",
+        "property_query": "Fuzzy search string matching a property name or address (e.g. 'Wild Olive', '49 Bannbury'). Used when property_id is unknown.",
+        "year": "Year for property data (e.g. 2026). Defaults to current year.",
+        "month": "Month number 1-12 (e.g. 4 for April). Defaults to current month.",
+        "close_extra_tabs": "Close duplicate Lofty tabs after operation. Keep True unless you need multiple tabs open.",
+        "dry_run": "Preview changes without writing. Always set True first before applying for real.",
+        "property_map": "Path to property_update_map.json. Defaults to config/property_update_map.json in the skill repo.",
+        "text": "The update text content to write. For Atlas Relay, the raw relay text to ingest.",
+        "patch": "Dict of Lofty property fields to update, e.g. {\"lease_begins_date\": \"05/01/2025\", \"updates\": \"...\"}. Keys must match Lofty API field names.",
+        "payload": "Full Lofty API payload dict (rarely needed — prefer patch for partial updates).",
+        "sections": "Dict of DESCRIPTION.md section names to new content, e.g. {\"Occupancy Status\": \"Vacant as of 04/20/2026\"}. Use this for partial updates.",
+        "content": "Full replacement text for a file. WARNING: replaces the entire file. Prefer sections= for partial updates.",
+        "opening": "Replacement text for the opening paragraph of DESCRIPTION.md.",
+        "updates_diff": "Plain-text summary of changes to email the owner. Auto-derived if omitted.",
+        "force": "Force the operation even if preconditions are not met (e.g. send email without new updates).",
+        "date": "Date string for the update entry, e.g. '04/20/2026'. Defaults to today.",
+        "multi_date_strategy": "How to handle properties with multiple lease dates: 'ambiguous' (report all), 'earliest', 'latest', or 'first'.",
+        "status": "Filter by property status, e.g. 'active', 'vacant'.",
+        "batch": "Process all properties in the map instead of one.",
+        "include_details": "Include DETAILS.md data in the Lofty push.",
+        "include_financials": "Include FINANCIALS.md data in the Lofty push.",
+        "pl_entry": "Dict of P&L entry fields, e.g. {\"rent\": 1200, \"expenses\": 450}. Keys must match Lofty P&L field names.",
+        "output_dir": "Directory for output files. Defaults to tmp/lofty-pm-lease-dates.",
+        "apply": "Apply changes to Lofty. Default False = dry-run only. Always preview first.",
+    }
+
+    # Helper to avoid repeating Field(description=...) boilerplate
+    def _F(name: str, default=None, **field_kwargs):
+        """Create a Field with the shared description for the given param name."""
+        desc = _P.get(name, name)
+        if default is not None:
+            return Field(default=default, description=desc, **field_kwargs)
+        return Field(description=desc, **field_kwargs)
+
     mcp = FastMCP(
         "lofty-pm",
         instructions=(
@@ -29,13 +69,17 @@ if FastMCP is not None:
         ),
     )
 
+    # ==========================================================================
+    # Legacy auth-capture tools (prefer webpack equivalents)
+    # ==========================================================================
+
     @mcp.tool()
     def get_manager_properties(
-        year: int | None = None,
-        month: int | None = None,
-        property_id: str | None = None,
-        property_query: str | None = None,
-        close_extra_tabs: bool = True,
+        year: Annotated[int | None, _F("year")] = None,
+        month: Annotated[int | None, _F("month")] = None,
+        property_id: Annotated[str | None, _F("property_id")] = None,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        close_extra_tabs: Annotated[bool, _F("close_extra_tabs")] = True,
     ) -> dict[str, Any]:
         """LEGACY (prefer webpack_get_manager_properties): Fetch the live Lofty manager property list, or one matched property. Requires auth capture."""
         return service.get_manager_properties(
@@ -48,11 +92,11 @@ if FastMCP is not None:
 
     @mcp.tool()
     def build_property_payloads(
-        property_id: str | None = None,
-        property_query: str | None = None,
-        year: int | None = None,
-        month: int | None = None,
-        close_extra_tabs: bool = True,
+        property_id: Annotated[str | None, _F("property_id")] = None,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        year: Annotated[int | None, _F("year")] = None,
+        month: Annotated[int | None, _F("month")] = None,
+        close_extra_tabs: Annotated[bool, _F("close_extra_tabs")] = True,
     ) -> dict[str, Any]:
         """Build fresh save/send payloads for a Lofty property from the live manager data."""
         return service.build_property_payloads(
@@ -65,11 +109,11 @@ if FastMCP is not None:
 
     @mcp.tool()
     def update_manager_property(
-        property_id: str | None = None,
-        payload: dict[str, Any] | None = None,
-        patch: dict[str, Any] | None = None,
-        property_query: str | None = None,
-        close_extra_tabs: bool = True,
+        property_id: Annotated[str | None, _F("property_id")] = None,
+        payload: Annotated[dict[str, Any] | None, _F("payload")] = None,
+        patch: Annotated[dict[str, Any] | None, _F("patch")] = None,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        close_extra_tabs: Annotated[bool, _F("close_extra_tabs")] = True,
     ) -> dict[str, Any]:
         """LEGACY (prefer webpack_update_property): Apply an update-manager-property mutation through Lofty's in-page runtime. Requires auth capture."""
         return service.update_manager_property(
@@ -82,13 +126,13 @@ if FastMCP is not None:
 
     @mcp.tool()
     def send_property_updates(
-        property_id: str | None = None,
-        updates_diff: str | None = None,
-        payload: dict[str, Any] | None = None,
-        property_query: str | None = None,
-        close_extra_tabs: bool = True,
+        property_id: Annotated[str | None, _F("property_id")] = None,
+        updates_diff: Annotated[str | None, _F("updates_diff")] = None,
+        payload: Annotated[dict[str, Any] | None, _F("payload")] = None,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        close_extra_tabs: Annotated[bool, _F("close_extra_tabs")] = True,
     ) -> dict[str, Any]:
-        """Send the owner update email for a Lofty property."""
+        """Send the owner update email for a Lofty property. Use after publish_latest_property_update or with a pre-built payload."""
         return service.send_property_updates(
             property_id=property_id,
             updates_diff=updates_diff,
@@ -97,13 +141,17 @@ if FastMCP is not None:
             close_extra_tabs=close_extra_tabs,
         )
 
+    # ==========================================================================
+    # Atlas Relay / update writing tools
+    # ==========================================================================
+
     @mcp.tool()
     def ingest_atlas_relay_update(
-        text: str,
-        property_query: str | None = None,
-        date: str | None = None,
-        property_map: str | None = None,
-        dry_run: bool = False,
+        text: Annotated[str, _F("text")],
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        date: Annotated[str | None, _F("date")] = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        dry_run: Annotated[bool, _F("dry_run")] = False,
     ) -> dict[str, Any]:
         """Clean Atlas Relay text and write it into canonical UPDATES.md for the matched property."""
         return service.ingest_atlas_relay_update(
@@ -116,15 +164,15 @@ if FastMCP is not None:
 
     @mcp.tool()
     def ingest_and_publish_atlas_relay_update(
-        text: str,
-        property_query: str | None = None,
-        date: str | None = None,
-        property_map: str | None = None,
-        dry_run: bool = False,
-        close_extra_tabs: bool = True,
-        force: bool = False,
+        text: Annotated[str, _F("text")],
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        date: Annotated[str | None, _F("date")] = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        dry_run: Annotated[bool, _F("dry_run")] = False,
+        close_extra_tabs: Annotated[bool, _F("close_extra_tabs")] = True,
+        force: Annotated[bool, _F("force")] = False,
     ) -> dict[str, Any]:
-        """End-to-end Atlas Relay ingest into UPDATES.md, then publish to Lofty PM."""
+        """End-to-end: clean Atlas Relay text, write to UPDATES.md, then publish to Lofty PM and send owner email."""
         return service.ingest_and_publish_atlas_relay_update(
             text=text,
             property_query=property_query,
@@ -137,13 +185,13 @@ if FastMCP is not None:
 
     @mcp.tool()
     def write_property_update(
-        property_query: str,
-        text: str,
-        date: str | None = None,
-        property_map: str | None = None,
-        dry_run: bool = False,
+        property_query: Annotated[str, _F("property_query")],
+        text: Annotated[str, _F("text")],
+        date: Annotated[str | None, _F("date")] = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        dry_run: Annotated[bool, _F("dry_run")] = False,
     ) -> dict[str, Any]:
-        """Write a canonical dated entry into a property's UPDATES.md."""
+        """Write a canonical dated entry into a property's UPDATES.md. Pass property_query (name/address) and the update text."""
         return service.write_property_update(
             property_query=property_query,
             text=text,
@@ -154,13 +202,13 @@ if FastMCP is not None:
 
     @mcp.tool()
     def publish_latest_property_update(
-        property_query: str,
-        property_map: str | None = None,
-        dry_run: bool = False,
-        close_extra_tabs: bool = True,
-        force: bool = False,
+        property_query: Annotated[str, _F("property_query")],
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        dry_run: Annotated[bool, _F("dry_run")] = False,
+        close_extra_tabs: Annotated[bool, _F("close_extra_tabs")] = True,
+        force: Annotated[bool, _F("force")] = False,
     ) -> dict[str, Any]:
-        """Push the canonical property update history to Lofty and optionally send owner email."""
+        """Push the latest update from UPDATES.md to Lofty PM and send owner email. Always dry_run=true first to preview."""
         return service.publish_latest_property_update(
             property_query=property_query,
             property_map=property_map,
@@ -169,14 +217,18 @@ if FastMCP is not None:
             force=force,
         )
 
+    # ==========================================================================
+    # Property map tools
+    # ==========================================================================
+
     @mcp.tool()
     def rebuild_property_map(
-        property_map: str | None = None,
-        dry_run: bool = True,
-        year: int | None = None,
-        month: int | None = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        dry_run: Annotated[bool, _F("dry_run")] = True,
+        year: Annotated[int | None, _F("year")] = None,
+        month: Annotated[int | None, _F("month")] = None,
     ) -> dict[str, Any]:
-        """Rebuild property_update_map.json from live Lofty manager properties and the Real Estate corpus."""
+        """Rebuild property_update_map.json by fuzzy-matching live Lofty properties against the Dropbox Real Estate corpus. Always dry_run=true first."""
         return service.rebuild_property_map(
             property_map=property_map,
             dry_run=dry_run,
@@ -184,14 +236,18 @@ if FastMCP is not None:
             month=month,
         )
 
+    # ==========================================================================
+    # Lease date tools
+    # ==========================================================================
+
     @mcp.tool()
     def extract_lease_begins_dates(
-        property_query: str | None = None,
-        multi_date_strategy: str = "ambiguous",
-        status: str | None = None,
-        property_map: str | None = None,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        multi_date_strategy: Annotated[str, _F("multi_date_strategy")] = "ambiguous",
+        status: Annotated[str | None, _F("status")] = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
     ) -> dict[str, Any]:
-        """Audit lease_begins_date candidates from DESCRIPTION.md and PMA fallbacks."""
+        """Audit lease_begins_date candidates from DESCRIPTION.md. Use 'ambiguous' to see all candidates before applying."""
         return service.extract_lease_begins_dates(
             property_query=property_query,
             multi_date_strategy=multi_date_strategy,
@@ -201,16 +257,16 @@ if FastMCP is not None:
 
     @mcp.tool()
     def update_lease_begins_dates(
-        property_query: str | None = None,
-        multi_date_strategy: str = "earliest",
-        apply: bool = False,
-        year: int | None = None,
-        month: int | None = None,
-        close_extra_tabs: bool = True,
-        property_map: str | None = None,
-        output_dir: str | None = None,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        multi_date_strategy: Annotated[str, _F("multi_date_strategy")] = "earliest",
+        apply: Annotated[bool, _F("apply")] = False,
+        year: Annotated[int | None, _F("year")] = None,
+        month: Annotated[int | None, _F("month")] = None,
+        close_extra_tabs: Annotated[bool, _F("close_extra_tabs")] = True,
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        output_dir: Annotated[str | None, _F("output_dir")] = None,
     ) -> dict[str, Any]:
-        """Prepare or apply lease_begins_date updates using the skill's fallback logic."""
+        """Apply lease_begins_date updates to Lofty properties. Always run with apply=False first to preview changes."""
         return service.update_lease_begins_dates(
             property_query=property_query,
             multi_date_strategy=multi_date_strategy,
@@ -222,13 +278,17 @@ if FastMCP is not None:
             output_dir=output_dir,
         )
 
+    # ==========================================================================
+    # Webpack tools (PREFERRED — no auth capture needed)
+    # ==========================================================================
+
     @mcp.tool()
     def webpack_get_manager_properties(
-        year: int | None = None,
-        month: int | None = None,
-        property_id: str | None = None,
+        year: Annotated[int | None, _F("year")] = None,
+        month: Annotated[int | None, _F("month")] = None,
+        property_id: Annotated[str | None, _F("property_id")] = None,
     ) -> dict[str, Any]:
-        """PREFERRED: Fetch all Lofty manager properties via webpack (no auth capture). Returns property list with IDs, addresses, and fields. Use this instead of get_manager_properties."""
+        """PREFERRED: Fetch all Lofty manager properties via webpack (no auth capture). Returns list of properties with id, assetName, address, slug, etc. Look up property_id here if unknown."""
         return service.webpack_get_manager_properties(
             year=year,
             month=month,
@@ -237,23 +297,27 @@ if FastMCP is not None:
 
     @mcp.tool()
     def webpack_update_property(
-        property_id: str,
-        patch: dict[str, Any],
+        property_id: Annotated[str, _F("property_id")],
+        patch: Annotated[dict[str, Any], _F("patch")],
     ) -> dict[str, Any]:
-        """PREFERRED: Update a Lofty property via webpack injection (no auth capture). Pass property_id and a patch dict like {\"lease_begins_date\": \"05/01/2025\"}. Use this instead of update_manager_property."""
+        """PREFERRED: Update a Lofty property via webpack (no auth capture). Pass property_id and patch dict e.g. {\"lease_begins_date\": \"05/01/2025\", \"updates\": \"New update text\"}."""
         return service.webpack_update_property(
             property_id=property_id,
             patch=patch,
         )
 
+    # ==========================================================================
+    # Data extraction tools
+    # ==========================================================================
+
     @mcp.tool()
     def extract_property_data(
-        property_query: str | None = None,
-        property_id: str | None = None,
-        batch: bool = False,
-        property_map: str | None = None,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        property_id: Annotated[str | None, _F("property_id")] = None,
+        batch: Annotated[bool, _F("batch")] = False,
+        property_map: Annotated[str | None, _F("property_map")] = None,
     ) -> dict[str, Any]:
-        """Extract property details and financials from Lofty owner pages."""
+        """Extract property details and financials from Lofty owner pages. Creates/updates local DETAILS.md and FINANCIALS.md."""
         return service.extract_property_data(
             property_query=property_query,
             property_id=property_id,
@@ -263,24 +327,28 @@ if FastMCP is not None:
 
     @mcp.tool()
     def backfill_updates_history(
-        property_query: str | None = None,
-        property_map: str | None = None,
-        dry_run: bool = True,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        dry_run: Annotated[bool, _F("dry_run")] = True,
     ) -> dict[str, Any]:
-        """Backfill UPDATES.md history from live Lofty property data."""
+        """Backfill UPDATES.md history from live Lofty property data. Always dry_run=true first to preview."""
         return service.backfill_updates_history(
             property_query=property_query,
             property_map=property_map,
             dry_run=dry_run,
         )
 
+    # ==========================================================================
+    # DESCRIPTION.md read/write tools
+    # ==========================================================================
+
     @mcp.tool()
     def read_description_md(
-        property_query: str | None = None,
-        property_id: str | None = None,
-        property_map: str | None = None,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        property_id: Annotated[str | None, _F("property_id")] = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
     ) -> dict[str, Any]:
-        """Read and parse a property's DESCRIPTION.md into sections (opening, Offering Details, Property Details, etc). Use sections= mode for partial updates, content= only for full replacement."""
+        """Read and parse a property's DESCRIPTION.md into named sections (opening, Offering Details, Property Details, Occupancy Status, etc)."""
         return service.read_description_md(
             property_query=property_query,
             property_id=property_id,
@@ -289,15 +357,15 @@ if FastMCP is not None:
 
     @mcp.tool()
     def write_description_md(
-        property_query: str | None = None,
-        property_id: str | None = None,
-        property_map: str | None = None,
-        content: str | None = None,
-        sections: dict[str, str] | None = None,
-        opening: str | None = None,
-        dry_run: bool = False,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        property_id: Annotated[str | None, _F("property_id")] = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        content: Annotated[str | None, _F("content")] = None,
+        sections: Annotated[dict[str, str] | None, _F("sections")] = None,
+        opening: Annotated[str | None, _F("opening")] = None,
+        dry_run: Annotated[bool, _F("dry_run")] = False,
     ) -> dict[str, Any]:
-        """Write or update DESCRIPTION.md. Use sections={\"Occupancy Status\": \"new text\"} for partial updates. Use content=\"full text\" only when replacing the entire file. DRY-RUN FIRST with dry_run=true."""
+        """Write or update DESCRIPTION.md. Use sections={\"Occupancy Status\": \"new text\"} for partial updates. Use content=\"full text\" ONLY for complete replacement. Always dry_run=true first."""
         return service.write_description_md(
             property_query=property_query,
             property_id=property_id,
@@ -308,16 +376,20 @@ if FastMCP is not None:
             dry_run=dry_run,
         )
 
+    # ==========================================================================
+    # Push local data to Lofty
+    # ==========================================================================
+
     @mcp.tool()
     def push_property_data(
-        property_query: str | None = None,
-        property_id: str | None = None,
-        property_map: str | None = None,
-        include_details: bool = True,
-        include_financials: bool = True,
-        dry_run: bool = False,
+        property_query: Annotated[str | None, _F("property_query")] = None,
+        property_id: Annotated[str | None, _F("property_id")] = None,
+        property_map: Annotated[str | None, _F("property_map")] = None,
+        include_details: Annotated[bool, _F("include_details")] = True,
+        include_financials: Annotated[bool, _F("include_financials")] = True,
+        dry_run: Annotated[bool, _F("dry_run")] = False,
     ) -> dict[str, Any]:
-        """Push local DETAILS.md / FINANCIALS.md data back to Lofty. Reads local files, parses fields, applies patch via webpack. Set dry_run=true first to preview changes."""
+        """Push local DETAILS.md / FINANCIALS.md data back to Lofty via webpack. Always dry_run=true first to preview which fields will change."""
         return service.push_property_data(
             property_query=property_query,
             property_id=property_id,
@@ -327,6 +399,10 @@ if FastMCP is not None:
             dry_run=dry_run,
         )
 
+    # ==========================================================================
+    # P&L tools (webpack — no auth capture)
+    # ==========================================================================
+
     @mcp.tool()
     def webpack_get_pl_cutoff_config() -> dict[str, Any]:
         """Get P&L cutoff config (cutoff day, time, timezone). Lightweight read, no property_id needed."""
@@ -334,11 +410,11 @@ if FastMCP is not None:
 
     @mcp.tool()
     def webpack_get_pl_entry(
-        property_id: str,
-        year: int | None = None,
-        month: int | None = None,
+        property_id: Annotated[str, _F("property_id")],
+        year: Annotated[int | None, _F("year")] = None,
+        month: Annotated[int | None, _F("month")] = None,
     ) -> dict[str, Any]:
-        """Get a single P&L entry for a property. Requires property_id, optional year/month."""
+        """Get a single P&L entry for a property. Requires property_id. Returns income, expenses, and net for the given month."""
         return service.webpack_get_pl_entry(
             property_id=property_id,
             year=year,
@@ -347,12 +423,12 @@ if FastMCP is not None:
 
     @mcp.tool()
     def webpack_create_pl_entry(
-        property_id: str,
-        year: int | None = None,
-        month: int | None = None,
-        pl_entry: dict[str, Any] | None = None,
+        property_id: Annotated[str, _F("property_id")],
+        year: Annotated[int | None, _F("year")] = None,
+        month: Annotated[int | None, _F("month")] = None,
+        pl_entry: Annotated[dict[str, Any] | None, _F("pl_entry")] = None,
     ) -> dict[str, Any]:
-        """Create a new P&L entry for a property. Requires property_id. Optional year/month and pl_entry dict."""
+        """Create a new P&L entry for a property. Requires property_id. Pass pl_entry dict with fields like {\"rent\": 1200, \"expenses\": 450}."""
         return service.webpack_create_pl_entry(
             property_id=property_id,
             year=year,
@@ -362,12 +438,12 @@ if FastMCP is not None:
 
     @mcp.tool()
     def webpack_update_pl_entry(
-        property_id: str,
-        year: int | None = None,
-        month: int | None = None,
-        pl_entry: dict[str, Any] | None = None,
+        property_id: Annotated[str, _F("property_id")],
+        year: Annotated[int | None, _F("year")] = None,
+        month: Annotated[int | None, _F("month")] = None,
+        pl_entry: Annotated[dict[str, Any] | None, _F("pl_entry")] = None,
     ) -> dict[str, Any]:
-        """Update an existing P&L entry for a property. Requires property_id. Pass year/month and pl_entry dict with fields to update."""
+        """Update an existing P&L entry for a property. Requires property_id. Pass pl_entry dict with fields to update like {\"rent\": 1300}."""
         return service.webpack_update_pl_entry(
             property_id=property_id,
             year=year,
