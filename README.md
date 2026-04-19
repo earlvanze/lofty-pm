@@ -232,6 +232,54 @@ This tool doesn’t make Lofty easier to hack. It:
 - Doesn’t expose any Lofty API secrets, AWS sig keys, or private keys
 - Module IDs (51046) are just webpack chunk hashes, not security-sensitive
 
+## Adapting for Other Property Managers
+
+The `scripts/generic_pm_matcher.py` template makes it easy to adapt this tool for any PM platform:
+
+1. **Copy and rename**: `cp scripts/generic_pm_matcher.py scripts/acme_pm_matcher.py`
+2. **Update `PM_CONFIG`**: Change `name`, URL patterns, field names, and corpus structure
+3. **Replace `fetch_pm_properties()`**: Use your PM's API (REST, GraphQL, or browser automation)
+4. **Adjust `find_corpus_dirs()`**: If your directory layout differs
+5. **Tune `matching` weights**: If addresses follow different conventions
+
+The fuzzy matcher handles:
+- Address normalization (ordinals, unit numbers, punctuation)
+- State/city bonus scoring
+- Substring and word-overlap matching
+- Unresolved property detection
+- Path templating (`${PM_WORKSPACE_ROOT}`) for portability
+
+Example adaptation for a fictional "Acme PM":
+
+```python
+PM_CONFIG = {
+    "name": "Acme",
+    "pm_url_patterns": ["acme.com/properties", "acme.com/manage"],
+    "pm_property_fields": {
+        "id": "property_id",
+        "name": "display_name",
+        "address": "street_address",
+        "city": "city",
+        "state": "state_code",
+        "zip": "zip_code",
+        "slug": "url_slug",
+        "unit": "unit_id",
+    },
+    "matching": {
+        "exact_match_threshold": 100,
+        "word_overlap_weight": 5,
+        "minimum_match_score": 10,
+    },
+}
+
+def fetch_pm_properties(year=None, month=None):
+    # Use Acme's REST API
+    import requests
+    resp = requests.get(f"https://api.acme.com/v1/properties?year={year}&month={month}",
+                       headers={"Authorization": f"Bearer {os.environ['ACME_API_KEY']}"})
+    return resp.json()["properties"]
+```
+
 ## License
 
 Private repository. All rights reserved.
