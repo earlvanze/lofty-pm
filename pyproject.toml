@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lofty-pm-mcp"
+version = "0.1.0"
+description = "MCP server for Lofty property-management automation"
+readme = "SKILL.md"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.13.0",
+  "requests>=2.31.0",
+  "websocket-client>=1.8.0",
+  "websockets>=12.0"
+]
+
+[project.scripts]
+lofty-pm-mcp = "lofty_pm_mcp.server:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

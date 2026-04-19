@@ -65,6 +65,16 @@ Execution order:
   - writes `lease_begins_date` through `update-manager-property`
   - avoids brittle DOM interaction with `input[name="lease_begins_date"]`
 
+### MCP server surface
+- `src/lofty_pm_mcp/server.py`
+  - exposes the core Lofty PM flows as MCP tools
+  - wraps live manager-property fetches, payload building, save/send mutations, and lease date backfills
+- `pyproject.toml`
+  - packages the repo as an installable MCP server entry point: `lofty-pm-mcp`
+- environment notes
+  - set `LOFTY_PM_WORKSPACE_ROOT` when the Dropbox/Real Estate corpus lives outside the repo checkout
+  - optionally set `LOFTY_PM_REAL_ESTATE_ROOT` directly to override the property-document search root
+
 ### Recommended one-shot flow
 
 ```bash

@@ -2,6 +2,7 @@
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import subprocess
 import sys
@@ -19,8 +20,8 @@ DOCX_CREATED_RE = re.compile(r'<dcterms:created[^>]*>([^<]+)</dcterms:created>',
 MONTH_NAME_DATE_RE = re.compile(r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:\s*(?:st|nd|rd|th))?\s*,\s*(\d{4})', re.I)
 TERM_RE = re.compile(r'beginning\s+(.{1,40}?)\s+and\s+ending\s+(.{1,40}?)(?:\.|\n)', re.I)
 STR_EXCLUDE_RE = re.compile(r'\b724\b')
-WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
-REAL_ESTATE_ROOT = WORKSPACE_ROOT / 'Dropbox' / 'Real Estate'
+WORKSPACE_ROOT = Path(os.environ.get('LOFTY_PM_WORKSPACE_ROOT') or Path(__file__).resolve().parents[3])
+REAL_ESTATE_ROOT = Path(os.environ.get('LOFTY_PM_REAL_ESTATE_ROOT') or (WORKSPACE_ROOT / 'Dropbox' / 'Real Estate'))
 
 
 def load_json(path: Path):
